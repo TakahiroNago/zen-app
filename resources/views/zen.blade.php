@@ -21,8 +21,8 @@
                     @include('partials.toast', ['message' => session('consultation_rate_limited'), 'type' => 'error'])
                 @endif
                 <p class="eyebrow">{{ __('A MOMENT FOR YOU') }}</p>
-                <h1>{{ __('心にある悩みを') }}<br>{{ __('聞かせてください') }}</h1>
-                <p class="page-description">{{ __('禅の考え方を基にして、AIがあなたの悩みに向き合います。') }}</p>
+                <h1>{{ __('心にある思いを') }}<br>{{ __('聞かせてください') }}</h1>
+                <p class="page-description">{{ __('禅の考え方を基にして、AIがあなたの心に向き合います。') }}</p>
 
                 @auth
                     @if (! $creditSummary['unlimited'] && $creditSummary['total'] === 0)
@@ -49,9 +49,9 @@
                     @endif
                 @endauth
 
-                <form class="question-form" method="POST" action="{{ route('zen.respond') }}" data-loading-label="{{ __('お悩みを読み解いています...') }}">
+                <form class="question-form" method="POST" action="{{ route('zen.respond') }}" data-loading-label="{{ __('読み解いています...') }}">
                     @csrf
-                    <label class="question-label" for="concern">{{ __('あなたのお悩み') }}</label>
+                    <label class="question-label" for="concern">{{ __('あなたの思い') }}</label>
                     <input
                         class="question-input"
                         id="concern"
@@ -79,7 +79,7 @@
                     </button>
                 </form>
                 @if (session('anonymized_concern'))
-                    <form class="question-form" method="POST" action="{{ route('zen.respond') }}" data-loading-label="{{ __('お悩みを読み解いています...') }}">
+                    <form class="question-form" method="POST" action="{{ route('zen.respond') }}" data-loading-label="{{ __('読み解いています...') }}">
                         @csrf
                         <p class="form-notice">{{ __('個人情報と思われる部分を伏せた内容で相談できます。内容をご確認ください。') }}</p>
                         <p class="question-quote">{{ session('anonymized_concern') }}</p>

@@ -23,7 +23,7 @@
                     <p class="eyebrow consultation-detail-eyebrow">WORDS FOR YOU</p>
                     <h1 class="consultation-detail-title">{{ __('禅師からのことば') }}</h1>
                     <section class="result-section">
-                        <h2 class="section-label">{{ __('あなたのお悩み') }}</h2>
+                        <h2 class="section-label">{{ __('あなたの思い') }}</h2>
                         @if ($consultation['concern_hidden'])
                             <p class="question-quote">{{ __('プライバシー保護のため、相談文は表示されません。') }}</p>
                         @else

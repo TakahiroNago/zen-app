@@ -18,8 +18,8 @@
                         @include('partials.toast', ['message' => __('メールアドレスを確認しました。')])
                     @endif
                     <p class="eyebrow">{{ __('今日のあなたへ') }}</p>
-                    <h1 class="welcome-title">{{ __('迷いの中に') }}<br>{{ __('小さな一歩を') }}</h1>
-                    <p class="welcome-description">{{ __('お悩みを聞かせてください。AIが禅の視点で、心を見つめることばをお届けします。') }}</p>
+                    <h1 class="welcome-title">{{ __('ゆっくりと') }}<br>{{ __('心を見つめて') }}</h1>
+                    <p class="welcome-description">{{ __('思っていることを聞かせてください。AIが禅の視点で、心を見つめる言葉をお届けします。') }}</p>
                     <a class="primary-action" href="{{ route('zen') }}">
                         <span>{{ __('AI禅師に相談する') }}</span>
                         <span class="action-arrow" aria-hidden="true">→</span>

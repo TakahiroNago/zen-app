@@ -16,9 +16,6 @@
                 @if (session('status'))
                     @include('partials.toast', ['message' => session('status')])
                 @endif
-                @if ($databaseConsultations?->isNotEmpty())
-                    <p class="page-description">{{ __('個人情報を含む相談は :days 日を過ぎると自動的に削除されます。それ以外の相談は、削除するまで保存されます。', ['days' => config('zen.consultation_retention_days')]) }}</p>
-                @endif
                 <div class="history-heading">
                     <h1>{{ __('ご相談の記録') }}</h1>
                     <form class="history-filter" method="GET" action="{{ route('consultations.index') }}">

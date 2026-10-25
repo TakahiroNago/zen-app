@@ -16,7 +16,7 @@
                     <p class="eyebrow consultation-detail-eyebrow">YOUR REFLECTION</p>
                     <h1 class="consultation-detail-title">{{ __('禅師からのことば') }}</h1>
                     <section class="result-section">
-                        <h2 class="section-label">{{ __('あなたのお悩み') }}</h2>
+                        <h2 class="section-label">{{ __('あなたの思い') }}</h2>
                         <p class="question-quote">{{ $consultation['concern'] }}</p>
                     </section>
                     <section class="result-section">
