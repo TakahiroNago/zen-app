@@ -301,7 +301,7 @@ test('users can manage Stripe billing from account settings', function () {
         ->get(route('account.settings.edit'))
         ->assertOk()
         ->assertSee('現在のプラン：ライト')
-        ->assertSee('契約・お支払いを管理')
+        ->assertSee('契約・お支払いを管理(Stripe)')
         ->assertSee(route('billing.portal'));
 });
 
@@ -313,7 +313,7 @@ test('account settings show the current free plan without billing actions for us
         ->assertOk()
         ->assertSee('現在のプラン：無料')
         ->assertDontSee('お支払い情報を管理')
-        ->assertDontSee('契約・お支払いを管理');
+        ->assertDontSee('契約・お支払いを管理(Stripe)');
 });
 
 test('account settings show the current paid plan and scheduled cancellation date', function () {
@@ -333,7 +333,65 @@ test('account settings show the current paid plan and scheduled cancellation dat
         ->assertSee('自動更新：オフ')
         ->assertSee($periodEnd->format('Y年n月j日').'に終了予定')
         ->assertSee('自動更新をオンにする')
-        ->assertSee('契約・お支払いを管理');
+        ->assertSee('契約・お支払いを管理(Stripe)');
+});
+
+test('lite members can select monthly or yearly premium billing in the confirmation dialog', function () {
+    config([
+        'services.stripe.prices.premium' => 'price_premium',
+        'services.stripe.prices.premium_yearly' => 'price_premium_yearly',
+    ]);
+
+    $liteMember = User::factory()->create([
+        'plan' => User::PLAN_LITE,
+        'stripe_customer_id' => 'cus_upgrade',
+        'stripe_subscription_id' => 'sub_upgrade',
+    ]);
+
+    $this->actingAs($liteMember)
+        ->get(route('account.settings.edit'))
+        ->assertOk()
+        ->assertSeeInOrder([
+            '<dialog class="confirm-dialog" data-plan-change-dialog',
+            '<fieldset class="plan-billing-options" data-plan-change-options="premium" hidden>',
+            'name="dialog-premium-plan" value="premium"',
+            'name="dialog-premium-plan" value="premium_yearly"',
+        ], false)
+        ->assertSee('data-plan-options-in-dialog', false)
+        ->assertSee('name="dialog-premium-plan" value="premium"', false)
+        ->assertSee('name="dialog-premium-plan" value="premium" data-plan-dialog-option data-confirmation-note="変更後のプラン：プレミアムプラン(月額)" checked', false)
+        ->assertSee('name="dialog-premium-plan" value="premium_yearly" data-plan-dialog-option data-confirmation-note="変更後のプラン：プレミアムプラン(年額)"', false)
+        ->assertSee('月額プラン', false)
+        ->assertSee('年額プラン', false);
+});
+
+test('premium members can select monthly or yearly lite billing in the confirmation dialog', function () {
+    config([
+        'services.stripe.prices.lite' => 'price_lite',
+        'services.stripe.prices.lite_yearly' => 'price_lite_yearly',
+    ]);
+    $premiumMember = User::factory()->create([
+        'plan' => User::PLAN_PREMIUM,
+        'stripe_customer_id' => 'cus_downgrade_billing',
+        'stripe_subscription_id' => 'sub_downgrade_billing',
+    ]);
+
+    $this->actingAs($premiumMember)
+        ->get(route('account.settings.edit'))
+        ->assertOk()
+        ->assertSee('data-plan-options-in-dialog="lite"', false)
+        ->assertSee('data-plan-timing-in-dialog="lite"', false)
+        ->assertSeeInOrder([
+            '<fieldset class="plan-billing-options" data-plan-change-options="lite" hidden>',
+            'name="dialog-lite-plan" value="lite"',
+            'name="dialog-lite-plan" value="lite_yearly"',
+        ], false)
+        ->assertSee('<fieldset class="plan-billing-options" data-plan-change-timing="lite" hidden>', false)
+        ->assertSee('name="timing" value="period_end" form="account-lite-plan-change-form" data-plan-dialog-timing', false)
+        ->assertSee('name="timing" value="immediate" form="account-lite-plan-change-form" data-plan-dialog-timing', false)
+        ->assertSee('name="dialog-lite-plan" value="lite" data-plan-dialog-option data-confirmation-note="変更後のプラン：ライトプラン(月額)" checked', false)
+        ->assertSee('name="dialog-lite-plan" value="lite_yearly" data-plan-dialog-option data-confirmation-note="変更後のプラン：ライトプラン(年額)"', false)
+        ->assertSee('ライトプランへ変更');
 });
 
 test('account settings offer immediate upgrades and end-of-period downgrades', function () {
@@ -364,7 +422,7 @@ test('account settings offer immediate upgrades and end-of-period downgrades', f
     $this->actingAs($premiumMember)
         ->get(route('account.settings.edit'))
         ->assertOk()
-        ->assertSeeInOrder(['ライトプランへ変更', '契約・お支払いを管理'])
+        ->assertSeeInOrder(['ライトプランへ変更', '契約・お支払いを管理(Stripe)'])
         ->assertSee('data-plan-change-form', false)
         ->assertSee('data-plan-change-dialog', false)
         ->assertSee('現在のプレミアム期間終了後にライトプランへ切り替えます。')
@@ -392,11 +450,35 @@ test('account settings allow members to schedule a billing frequency change', fu
     $this->actingAs($user)
         ->get(route('account.settings.edit'))
         ->assertOk()
-        ->assertSee('お支払い周期')
-        ->assertSee('月額・年額を切り替える')
-        ->assertSee('value="lite_yearly"', false)
+        ->assertSee('年額プランに切り替える')
+        ->assertSee('name="plan" value="lite_yearly"', false)
+        ->assertDontSee('<legend>お支払い周期</legend>', false)
+        ->assertDontSee('type="radio" name="plan"', false)
         ->assertSee('お支払い周期の変更は現在の契約期間終了後に適用されます。')
         ->assertSee('現在の契約期間終了日時:', false);
+});
+
+test('account settings offer switching from annual to monthly billing', function () {
+    config([
+        'services.stripe.secret' => 'sk_test',
+        'services.stripe.prices.premium' => 'price_premium',
+        'services.stripe.prices.premium_yearly' => 'price_premium_yearly',
+    ]);
+    $user = User::factory()->create([
+        'plan' => User::PLAN_PREMIUM,
+        'stripe_customer_id' => 'cus_annual_frequency',
+        'stripe_subscription_id' => 'sub_annual_frequency',
+        'stripe_subscription_interval' => 'year',
+        'stripe_current_period_end' => now()->addDays(12),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('account.settings.edit'))
+        ->assertOk()
+        ->assertSee('月額プランに切り替える')
+        ->assertSee('name="plan" value="premium"', false)
+        ->assertDontSee('<legend>お支払い周期</legend>', false)
+        ->assertDontSee('type="radio" name="plan"', false);
 });
 
 test('account settings show and allow cancellation of a scheduled billing frequency change', function () {
@@ -414,9 +496,10 @@ test('account settings show and allow cancellation of a scheduled billing freque
         ->get(route('account.settings.edit'))
         ->assertOk()
         ->assertSee('年額へ変更予定')
-        ->assertSee('予約を取り消す')
+        ->assertSee('プラン変更の予約を取り消す')
         ->assertSee(route('billing.plan.cancel'))
-        ->assertDontSee('月額・年額を切り替える');
+        ->assertDontSee('年額プランに切り替える')
+        ->assertDontSee('月額プランに切り替える');
 });
 
 test('account settings show and allow cancellation of a scheduled downgrade', function () {
@@ -433,7 +516,7 @@ test('account settings show and allow cancellation of a scheduled downgrade', fu
         ->get(route('account.settings.edit'))
         ->assertOk()
         ->assertSee('ライトプランへ切り替わる予定です。')
-        ->assertSee('予約を取り消す')
+        ->assertSee('プラン変更の予約を取り消す')
         ->assertSee(route('billing.plan.cancel'));
 });
 

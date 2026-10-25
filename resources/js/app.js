@@ -54,7 +54,46 @@ if (planChangeDialog) {
 	const planChangeNote = planChangeDialog.querySelector('[data-plan-change-note]');
 	const planChangeCancel = planChangeDialog.querySelector('[data-plan-change-cancel]');
 	const planChangeConfirm = planChangeDialog.querySelector('[data-plan-change-confirm]');
+	const planChangeOptionGroups = [...planChangeDialog.querySelectorAll('[data-plan-change-options]')];
+	const planChangeTimingGroups = [...planChangeDialog.querySelectorAll('[data-plan-change-timing]')];
 	let pendingPlanChangeForm = null;
+
+	const updatePlanChangeConfirmation = (form) => {
+		const confirmationNotes = [];
+		if (form.dataset.confirmationNote) {
+			confirmationNotes.push(form.dataset.confirmationNote);
+		}
+
+		const timingOptions = planChangeDialog.querySelector(
+			`[data-plan-change-timing="${form.dataset.planTimingInDialog}"]`,
+		);
+		const timingOption = timingOptions?.querySelector('input[name="timing"]:checked')
+			?? form.querySelector('input[name="timing"]:checked');
+		if (timingOption?.dataset.confirmationNote) {
+			confirmationNotes.push(timingOption.dataset.confirmationNote);
+		}
+
+		const planOptions = planChangeDialog.querySelector(
+			`[data-plan-change-options="${form.dataset.planOptionsInDialog}"]`,
+		);
+		const selectedPlan = planOptions?.querySelector('input[data-plan-dialog-option]:checked');
+		if (selectedPlan?.dataset.confirmationNote) {
+			confirmationNotes.push(selectedPlan.dataset.confirmationNote);
+		}
+
+		if (!form.dataset.planOptionsInDialog) {
+			const selectedOption = form.querySelector('input[name="plan"]:checked');
+			if (selectedOption?.dataset.confirmationNote) {
+				confirmationNotes.push(selectedOption.dataset.confirmationNote);
+			}
+		}
+
+		if (form.dataset.confirmationPeriodEndLabel && form.dataset.confirmationPeriodEndDate) {
+			confirmationNotes.push(`${form.dataset.confirmationPeriodEndLabel}\n${form.dataset.confirmationPeriodEndDate}`);
+		}
+
+		planChangeNote.textContent = confirmationNotes.join('\n\n');
+	};
 
 	document.querySelectorAll('[data-plan-change-form]').forEach((form) => {
 		form.addEventListener('submit', (event) => {
@@ -65,22 +104,30 @@ if (planChangeDialog) {
 
 			event.preventDefault();
 			pendingPlanChangeForm = form;
-			const confirmationNotes = [];
-			if (form.dataset.confirmationNote) {
-				confirmationNotes.push(form.dataset.confirmationNote);
-			}
-
-			const selectedOption = form.querySelector('input[name="timing"]:checked');
-			if (selectedOption?.dataset.confirmationNote) {
-				confirmationNotes.push(selectedOption.dataset.confirmationNote);
-			}
-
-			if (form.dataset.confirmationPeriodEndLabel && form.dataset.confirmationPeriodEndDate) {
-				confirmationNotes.push(`${form.dataset.confirmationPeriodEndLabel}\n${form.dataset.confirmationPeriodEndDate}`);
-			}
-
-			planChangeNote.textContent = confirmationNotes.join('\n\n');
+			planChangeOptionGroups.forEach((group) => {
+				group.hidden = group.dataset.planChangeOptions !== form.dataset.planOptionsInDialog;
+			});
+			planChangeTimingGroups.forEach((group) => {
+				group.hidden = group.dataset.planChangeTiming !== form.dataset.planTimingInDialog;
+			});
+			updatePlanChangeConfirmation(form);
 			planChangeDialog.showModal();
+		});
+	});
+
+	planChangeDialog.querySelectorAll('input[data-plan-dialog-option]').forEach((option) => {
+		option.addEventListener('change', () => {
+			if (pendingPlanChangeForm?.dataset.planOptionsInDialog) {
+				updatePlanChangeConfirmation(pendingPlanChangeForm);
+			}
+		});
+	});
+
+	planChangeDialog.querySelectorAll('input[data-plan-dialog-timing]').forEach((option) => {
+		option.addEventListener('change', () => {
+			if (pendingPlanChangeForm) {
+				updatePlanChangeConfirmation(pendingPlanChangeForm);
+			}
 		});
 	});
 
@@ -96,6 +143,18 @@ if (planChangeDialog) {
 
 		const form = pendingPlanChangeForm;
 		pendingPlanChangeForm = null;
+		if (form.dataset.planOptionsInDialog) {
+			const planOptions = planChangeDialog.querySelector(
+				`[data-plan-change-options="${form.dataset.planOptionsInDialog}"]`,
+			);
+			const selectedOption = planOptions?.querySelector('input[data-plan-dialog-option]:checked');
+			const planInput = form.querySelector('input[name="plan"]');
+
+			if (selectedOption && planInput) {
+				planInput.value = selectedOption.value;
+			}
+		}
+
 		form.dataset.confirmed = 'true';
 		planChangeDialog.close();
 		form.requestSubmit();

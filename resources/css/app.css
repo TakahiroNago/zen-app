@@ -1136,6 +1136,10 @@ h2 {
     border: 0;
 }
 
+.plan-billing-options[hidden] {
+    display: none;
+}
+
 .plan-billing-options legend {
     margin-bottom: 8px;
     color: var(--color-muted);

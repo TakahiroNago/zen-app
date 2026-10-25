@@ -25,8 +25,28 @@ test('free members see their current plan even when they have a Stripe customer'
         ->assertOk()
         ->assertSee('現在のプラン：無料')
         ->assertDontSee('お支払い情報を管理')
-        ->assertDontSee('契約・お支払いを管理');
+        ->assertDontSee('契約・お支払いを管理(Stripe)');
 });
+
+test('lite members with a scheduled plan or billing frequency change do not see the premium subscription action', function (array $scheduled) {
+    config([
+        'services.stripe.secret' => 'sk_test',
+        'services.stripe.prices.premium' => 'price_premium',
+    ]);
+    $user = User::factory()->create([
+        'plan' => User::PLAN_LITE,
+        'stripe_customer_id' => 'cus_scheduled_plan',
+        'stripe_subscription_id' => 'sub_scheduled_plan',
+    ] + $scheduled);
+
+    $this->actingAs($user)
+        ->get(route('plans'))
+        ->assertOk()
+        ->assertDontSee('プレミアムに申し込む');
+})->with([
+    'plan change' => [['stripe_scheduled_plan' => User::PLAN_PREMIUM]],
+    'billing frequency change' => [['stripe_scheduled_interval' => 'year']],
+]);
 
 test('paid subscribers see their billing interval on the plans and account settings pages', function () {
     foreach ([
@@ -264,12 +284,12 @@ test('lite members can upgrade to premium from the plans page while premium memb
         ->get(route('plans'))
         ->assertOk()
         ->assertSee('action="'.route('billing.plan.change').'"', false)
-        ->assertSee('name="plan" value="premium"', false)
-        ->assertSee('name="plan" value="premium_yearly"', false)
+        ->assertSee('name="plan" value="premium" data-confirmation-note="変更後のプラン：プレミアムプラン(月額)"', false)
+        ->assertSee('name="plan" value="premium_yearly" data-confirmation-note="変更後のプラン：プレミアムプラン(年額)"', false)
         ->assertSee('プレミアムに申し込む')
         ->assertSee('data-plan-change-form', false)
         ->assertSee('data-plan-change-dialog', false)
-        ->assertSee('日割り計算で今回の請求に充当されます。');
+        ->assertDontSee('変更後のプレミアムプランの内容');
 
     $premiumMember = User::factory()->create([
         'plan' => User::PLAN_PREMIUM,
@@ -323,7 +343,21 @@ test('lite members can immediately upgrade with Stripe prorations', function () 
                 : [
                     'id' => 'sub_lite',
                     'object' => 'subscription',
+                    'customer' => 'cus_lite',
+                    'status' => 'active',
                     'pending_update' => null,
+                    'current_period_start' => $this->periodStart,
+                    'current_period_end' => $this->periodEnd,
+                    'cancel_at_period_end' => false,
+                    'items' => [
+                        'object' => 'list',
+                        'data' => [[
+                            'id' => 'si_lite',
+                            'object' => 'subscription_item',
+                            'price' => ['id' => 'price_premium', 'object' => 'price'],
+                            'quantity' => 1,
+                        ]],
+                    ],
                 ];
 
             return [json_encode($response, JSON_THROW_ON_ERROR), 200, ['Content-Type' => 'application/json']];
@@ -343,11 +377,18 @@ test('lite members can immediately upgrade with Stripe prorations', function () 
             ->assertRedirect(route('account.settings.edit'))
             ->assertSessionHas('status', 'プレミアムプランへ切り替えました。日割り分は今回の請求に反映されています。');
 
+        $this->get(route('account.settings.edit'))
+            ->assertOk()
+            ->assertSee('現在のプラン：プレミアム(月額)')
+            ->assertSee('ライトプランへ変更')
+            ->assertDontSee('プレミアムプランへ変更');
+
         expect($httpClient->requests)->toHaveCount(2)
             ->and($httpClient->requests[1]['params']['items'][0]['price'])->toBe('price_premium')
             ->and($httpClient->requests[1]['params']['proration_behavior'])->toBe('always_invoice')
             ->and($httpClient->requests[1]['params']['payment_behavior'])->toBe('pending_if_incomplete')
-            ->and($user->fresh()->plan)->toBe(User::PLAN_LITE);
+            ->and($user->fresh()->plan)->toBe(User::PLAN_PREMIUM)
+            ->and($user->fresh()->stripe_subscription_interval)->toBe('month');
     } finally {
         ApiRequestor::setHttpClient(new CurlClient);
     }
@@ -388,7 +429,21 @@ test('lite members can upgrade to annual premium with Stripe prorations', functi
                 : [
                     'id' => 'sub_lite',
                     'object' => 'subscription',
+                    'customer' => 'cus_lite',
+                    'status' => 'active',
                     'pending_update' => null,
+                    'current_period_start' => now()->subDays(10)->timestamp,
+                    'current_period_end' => now()->addDays(20)->timestamp,
+                    'cancel_at_period_end' => false,
+                    'items' => [
+                        'object' => 'list',
+                        'data' => [[
+                            'id' => 'si_lite',
+                            'object' => 'subscription_item',
+                            'price' => ['id' => 'price_premium_yearly', 'object' => 'price'],
+                            'quantity' => 1,
+                        ]],
+                    ],
                 ];
 
             return [json_encode($response, JSON_THROW_ON_ERROR), 200, ['Content-Type' => 'application/json']];
@@ -408,11 +463,17 @@ test('lite members can upgrade to annual premium with Stripe prorations', functi
             ->assertRedirect(route('account.settings.edit'))
             ->assertSessionHas('status', 'プレミアムプランへ切り替えました。日割り分は今回の請求に反映されています。');
 
+        $this->get(route('account.settings.edit'))
+            ->assertOk()
+            ->assertSee('現在のプラン：プレミアム(年額)')
+            ->assertSee('ライトプランへ変更');
+
         expect($httpClient->requests)->toHaveCount(2)
             ->and($httpClient->requests[1]['params']['items'][0]['price'])->toBe('price_premium_yearly')
             ->and($httpClient->requests[1]['params']['proration_behavior'])->toBe('always_invoice')
             ->and($httpClient->requests[1]['params']['payment_behavior'])->toBe('pending_if_incomplete')
-            ->and($user->fresh()->plan)->toBe(User::PLAN_LITE);
+            ->and($user->fresh()->plan)->toBe(User::PLAN_PREMIUM)
+            ->and($user->fresh()->stripe_subscription_interval)->toBe('year');
     } finally {
         ApiRequestor::setHttpClient(new CurlClient);
     }
@@ -525,6 +586,7 @@ test('premium members can schedule a lite downgrade for the current period end',
                         'automatic_tax' => [
                             'enabled' => false,
                             'disabled_reason' => 'requires_location_inputs',
+                            'liability' => [],
                         ],
                         'proration_behavior' => 'create_prorations',
                     ]],
@@ -688,7 +750,20 @@ test('premium members can switch to lite immediately and receive a prorated refu
                     ]]],
                 ];
             } elseif ($method === 'post' && str_contains($absUrl, '/v1/subscriptions/sub_premium')) {
-                $response = ['id' => 'sub_premium', 'object' => 'subscription', 'status' => 'active'];
+                $response = [
+                    'id' => 'sub_premium',
+                    'object' => 'subscription',
+                    'customer' => 'cus_premium',
+                    'status' => 'active',
+                    'current_period_start' => $this->periodStart,
+                    'current_period_end' => now()->addDays(30)->timestamp,
+                    'cancel_at_period_end' => false,
+                    'items' => ['data' => [[
+                        'id' => 'si_premium',
+                        'price' => ['id' => 'price_lite'],
+                        'quantity' => 1,
+                    ]]],
+                ];
             } elseif ($method === 'get' && str_contains($absUrl, '/v1/invoices/in_premium')) {
                 $response = [
                     'id' => 'in_premium',
@@ -729,13 +804,21 @@ test('premium members can switch to lite immediately and receive a prorated refu
             ->assertRedirect(route('account.settings.edit'))
             ->assertSessionHas('status', '対象となるお支払いがある場合は未使用期間分を返金し、ライトプランへ切り替えました。');
 
+        $this->get(route('account.settings.edit'))
+            ->assertOk()
+            ->assertSee('現在のプラン：ライト(月額)')
+            ->assertSee('プレミアムプランへ変更')
+            ->assertDontSee('ライトプランへ変更');
+
         expect($httpClient->requests)->toHaveCount(4)
             ->and($httpClient->requests[1]['params']['items'][0]['price'])->toBe('price_lite')
-            ->and($httpClient->requests[1]['params']['billing_cycle_anchor'])->toBe('now')
+            ->and($httpClient->requests[1]['params']['billing_cycle_anchor'])->toBe(['type' => 'now'])
             ->and($httpClient->requests[1]['params']['proration_behavior'])->toBe('none')
             ->and($httpClient->requests[3]['params']['amount'])->toBe(
                 (int) round(580 * ($periodEnd - now()->timestamp) / ($periodEnd - $periodStart)),
-            );
+            )
+            ->and($user->fresh()->plan)->toBe(User::PLAN_LITE)
+            ->and($user->fresh()->stripe_subscription_interval)->toBe('month');
     } finally {
         ApiRequestor::setHttpClient(new CurlClient);
     }
@@ -816,21 +899,7 @@ test('members can cancel immediately and receive a prorated refund', function ()
                     'status' => 'active',
                     'current_period_start' => $this->periodStart,
                     'current_period_end' => $this->periodEnd,
-                    'latest_invoice' => [
-                        'id' => 'in_lite',
-                        'parent' => ['subscription_details' => ['subscription' => 'sub_lite']],
-                        'status' => 'paid',
-                        'currency' => 'jpy',
-                        'amount_paid' => 220,
-                        'payments' => ['data' => [[
-                            'status' => 'paid',
-                            'amount_paid' => 220,
-                            'payment' => ['payment_intent' => [
-                                'id' => 'pi_lite',
-                                'latest_charge' => ['id' => 'ch_lite', 'amount_refunded' => 0],
-                            ]],
-                        ]]],
-                    ],
+                    'latest_invoice' => 'in_lite',
                     'items' => ['data' => [[
                         'id' => 'si_lite',
                         'price' => ['id' => 'price_lite'],
@@ -838,6 +907,23 @@ test('members can cancel immediately and receive a prorated refund', function ()
                 ];
             } elseif ($method === 'delete' && str_contains($absUrl, '/v1/subscriptions/sub_lite')) {
                 $response = ['id' => 'sub_lite', 'object' => 'subscription', 'status' => 'canceled'];
+            } elseif ($method === 'get' && str_contains($absUrl, '/v1/invoices/in_lite')) {
+                $response = [
+                    'object' => 'invoice',
+                    'id' => 'in_lite',
+                    'parent' => ['subscription_details' => ['subscription' => 'sub_lite']],
+                    'status' => 'paid',
+                    'currency' => 'jpy',
+                    'amount_paid' => 220,
+                    'payments' => ['data' => [[
+                        'status' => 'paid',
+                        'amount_paid' => 220,
+                        'payment' => ['payment_intent' => [
+                            'id' => 'pi_lite',
+                            'latest_charge' => ['id' => 'ch_lite', 'amount_refunded' => 0],
+                        ]],
+                    ]]],
+                ];
             } elseif ($method === 'post' && str_contains($absUrl, '/v1/refunds')) {
                 $response = ['id' => 're_lite', 'object' => 'refund', 'amount' => $params['amount']];
             } else {
@@ -861,9 +947,9 @@ test('members can cancel immediately and receive a prorated refund', function ()
             ->assertRedirect(route('account.settings.edit'))
             ->assertSessionHas('status', '対象となるお支払いがある場合は未使用期間分を返金し、プランを解約しました。');
 
-        expect($httpClient->requests)->toHaveCount(3)
+        expect($httpClient->requests)->toHaveCount(4)
             ->and($httpClient->requests[1]['method'])->toBe('delete')
-            ->and($httpClient->requests[2]['params']['amount'])->toBe(
+            ->and($httpClient->requests[3]['params']['amount'])->toBe(
                 (int) round(220 * ($periodEnd - now()->timestamp) / ($periodEnd - $periodStart)),
             );
     } finally {
@@ -1372,22 +1458,25 @@ function accountDeletionStripeClient(int $periodStart, int $periodEnd, bool $fai
                     'status' => 'active',
                     'current_period_start' => $this->periodStart,
                     'current_period_end' => $this->periodEnd,
-                    'latest_invoice' => [
-                        'id' => 'in_del',
-                        'parent' => ['subscription_details' => ['subscription' => 'sub_del']],
-                        'status' => 'paid',
-                        'currency' => 'jpy',
-                        'amount_paid' => 300,
-                        'payments' => ['data' => [[
-                            'status' => 'paid',
-                            'amount_paid' => 300,
-                            'payment' => ['payment_intent' => [
-                                'id' => 'pi_del',
-                                'latest_charge' => ['id' => 'ch_del', 'amount_refunded' => 0],
-                            ]],
-                        ]]],
-                    ],
+                    'latest_invoice' => 'in_del',
                     'items' => ['data' => [['id' => 'si_del', 'price' => ['id' => 'price_lite']]]],
+                ];
+            } elseif ($method === 'get' && str_contains($absUrl, '/v1/invoices/in_del')) {
+                $response = [
+                    'object' => 'invoice',
+                    'id' => 'in_del',
+                    'parent' => ['subscription_details' => ['subscription' => 'sub_del']],
+                    'status' => 'paid',
+                    'currency' => 'jpy',
+                    'amount_paid' => 300,
+                    'payments' => ['data' => [[
+                        'status' => 'paid',
+                        'amount_paid' => 300,
+                        'payment' => ['payment_intent' => [
+                            'id' => 'pi_del',
+                            'latest_charge' => ['id' => 'ch_del', 'amount_refunded' => 0],
+                        ]],
+                    ]]],
                 ];
             } elseif ($method === 'post' && str_contains($absUrl, '/v1/refunds')) {
                 if ($this->failRefund) {
@@ -1430,11 +1519,12 @@ test('account deletion refunds the unused period before cancelling the subscript
         $methods = array_map(fn (array $request): string => $request['method'].' '.parse_url($request['absUrl'], PHP_URL_PATH), $httpClient->requests);
         expect($methods)->toBe([
             'get /v1/subscriptions/sub_del',
+            'get /v1/invoices/in_del',
             'post /v1/refunds',
             'delete /v1/subscriptions/sub_del',
             'delete /v1/customers/cus_del',
-        ])->and($httpClient->requests[1]['params']['payment_intent'])->toBe('pi_del')
-            ->and($httpClient->requests[1]['params']['amount'])->toBe(
+        ])->and($httpClient->requests[2]['params']['payment_intent'])->toBe('pi_del')
+            ->and($httpClient->requests[2]['params']['amount'])->toBe(
                 (int) round(300 * ($periodEnd - now()->timestamp) / ($periodEnd - $periodStart)),
             );
         $this->assertDatabaseMissing('users', ['id' => $user->id]);

@@ -159,7 +159,8 @@ class StripeBillingService
             ]);
         }
 
-        return DB::transaction(function () use ($user, $targetPlan, $targetProduct, $timing): string {
+        $refundFailed = false;
+        $result = DB::transaction(function () use ($user, $targetPlan, $targetProduct, $timing, &$refundFailed): string {
             $account = User::query()->lockForUpdate()->findOrFail($user->id);
 
             if (
@@ -272,7 +273,13 @@ class StripeBillingService
                     ]);
                 }
 
-                return isset($updatedSubscription->pending_update) ? 'upgrade_pending' : 'upgraded';
+                if (isset($updatedSubscription->pending_update)) {
+                    return 'upgrade_pending';
+                }
+
+                $this->handleSubscription($updatedSubscription, 'customer.subscription.updated', now()->timestamp);
+
+                return 'upgraded';
             }
 
             if (! $isIntervalChange && $timing === 'immediate') {
@@ -282,7 +289,7 @@ class StripeBillingService
                             'id' => $subscriptionItem->id,
                             'price' => $targetPriceId,
                         ]],
-                        'billing_cycle_anchor' => 'now',
+                        'billing_cycle_anchor' => ['type' => 'now'],
                         'proration_behavior' => 'none',
                         'payment_behavior' => 'error_if_incomplete',
                     ]);
@@ -294,14 +301,14 @@ class StripeBillingService
                     ]);
                 }
 
+                $this->handleSubscription($updatedSubscription, 'customer.subscription.updated', now()->timestamp);
+
                 try {
                     $this->refundUnusedPeriod($stripe, $subscription, $subscriptionItem, $account);
                 } catch (ApiErrorException|RuntimeException $exception) {
                     report($exception);
 
-                    throw ValidationException::withMessages([
-                        'billing' => 'ライトプランへの切り替えは完了しましたが、未使用期間分の返金を完了できませんでした。サポートへお問い合わせください。',
-                    ]);
+                    $refundFailed = true;
                 }
 
                 return 'downgraded_immediately';
@@ -344,7 +351,7 @@ class StripeBillingService
 
                 $nextPhaseParams = $this->schedulePhaseParameters($currentPhase);
                 $nextPhaseParams['start_date'] = (int) $periodEnd;
-                $nextPhaseParams['iterations'] = 1;
+                $nextPhaseParams['duration'] = ['interval' => $targetInterval, 'interval_count' => 1];
                 $nextPhaseParams['items'] = [[
                     'price' => $targetPriceId,
                     'quantity' => $subscriptionItem->quantity ?? 1,
@@ -377,6 +384,14 @@ class StripeBillingService
 
             return $isIntervalChange ? 'interval_change_scheduled' : 'downgrade_scheduled';
         });
+
+        if ($refundFailed) {
+            throw ValidationException::withMessages([
+                'billing' => 'ライトプランへの切り替えは完了しましたが、未使用期間分の返金を完了できませんでした。サポートへお問い合わせください。',
+            ]);
+        }
+
+        return $result;
     }
 
     public function cancelSubscription(User $user, string $timing): string
@@ -412,12 +427,7 @@ class StripeBillingService
             }
 
             $stripe = $this->stripe();
-            $subscription = $stripe->subscriptions->retrieve($account->stripe_subscription_id, [
-                'expand' => [
-                    'latest_invoice.payments.data.payment.charge',
-                    'latest_invoice.payments.data.payment.payment_intent.latest_charge',
-                ],
-            ]);
+            $subscription = $stripe->subscriptions->retrieve($account->stripe_subscription_id);
             if (
                 $subscription->customer !== $account->stripe_customer_id
                 || ! in_array($subscription->status, ['active', 'trialing'], true)
@@ -498,11 +508,14 @@ class StripeBillingService
         }
 
         $latestInvoice = $subscription->latest_invoice ?? null;
+        if (is_object($latestInvoice) && is_string($latestInvoice->id ?? null)) {
+            $latestInvoice = $latestInvoice->id;
+        }
         if (is_string($latestInvoice) && $latestInvoice !== '') {
             $latestInvoice = $stripe->invoices->retrieve($latestInvoice, [
                 'expand' => [
                     'payments.data.payment.charge',
-                    'payments.data.payment.payment_intent.latest_charge',
+                    'payments.data.payment.payment_intent',
                 ],
             ]);
         }
@@ -671,9 +684,21 @@ class StripeBillingService
         );
 
         if (is_array($parameters['automatic_tax'] ?? null)) {
-            $parameters['automatic_tax'] = array_intersect_key(
+            $automaticTax = array_intersect_key(
                 $parameters['automatic_tax'],
                 array_flip(['enabled', 'liability']),
+            );
+
+            if (is_array($automaticTax['liability'] ?? null)) {
+                $automaticTax['liability'] = array_filter(
+                    $automaticTax['liability'],
+                    static fn (mixed $value): bool => $value !== null && $value !== '',
+                );
+            }
+
+            $parameters['automatic_tax'] = array_filter(
+                $automaticTax,
+                static fn (mixed $value): bool => $value !== null && $value !== '' && $value !== [],
             );
         }
 
@@ -770,12 +795,7 @@ class StripeBillingService
             }
 
             foreach (array_unique($subscriptionIds) as $subscriptionId) {
-                $subscription = $stripe->subscriptions->retrieve($subscriptionId, [
-                    'expand' => [
-                        'latest_invoice.payments.data.payment.charge',
-                        'latest_invoice.payments.data.payment.payment_intent.latest_charge',
-                    ],
-                ]);
+                $subscription = $stripe->subscriptions->retrieve($subscriptionId);
 
                 if (in_array($subscription->status, ['canceled', 'incomplete_expired'], true)) {
                     continue;

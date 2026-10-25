@@ -38,20 +38,20 @@
                         <p>&bull; {{ __('相談回数無制限') }}</p>
                         <p>&bull; {{ __('すべての相談の記録') }}</p>
                         <p>&bull; {{ __('過去の相談を踏まえた回答') }}</p>
-                        @if (auth()->check() && auth()->user()->stripe_subscription_id !== null && auth()->user()->plan === \App\Models\User::PLAN_LITE && ! auth()->user()->stripe_cancel_at_period_end && auth()->user()->stripe_scheduled_plan === null && config('services.stripe.secret') && (config('services.stripe.prices.premium') || config('services.stripe.prices.premium_yearly')))
-                            <form method="POST" action="{{ route('billing.plan.change') }}" data-plan-change-form data-confirmation-note="{{ __('プレミアムへの変更は即時適用され、現在の期間の未使用分は日割り計算で今回の請求に充当されます。') }}">
+                        @if (auth()->check() && auth()->user()->stripe_subscription_id !== null && auth()->user()->plan === \App\Models\User::PLAN_LITE && ! auth()->user()->stripe_cancel_at_period_end && auth()->user()->stripe_scheduled_plan === null && auth()->user()->stripe_scheduled_interval === null && config('services.stripe.secret') && (config('services.stripe.prices.premium') || config('services.stripe.prices.premium_yearly')))
+                            <form method="POST" action="{{ route('billing.plan.change') }}" data-plan-change-form>
                                 @csrf
                                 <fieldset class="plan-billing-options">
                                     <legend>{{ __('お支払い方法') }}</legend>
                                     @if (config('services.stripe.prices.premium'))
                                         <label class="plan-billing-option">
-                                            <input type="radio" name="plan" value="premium" checked required>
+                                            <input type="radio" name="plan" value="premium" data-confirmation-note="{{ __('変更後のプラン') }}：{{ __('プレミアムプラン') }}({{ __('月額') }})" checked required>
                                             <span>{{ app()->isLocale('ja') ? '580円' : '¥580' }}/{{ __('月') }}</span>
                                         </label>
                                     @endif
                                     @if (config('services.stripe.prices.premium_yearly'))
                                         <label class="plan-billing-option">
-                                            <input type="radio" name="plan" value="premium_yearly" @checked(! config('services.stripe.prices.premium')) required>
+                                            <input type="radio" name="plan" value="premium_yearly" data-confirmation-note="{{ __('変更後のプラン') }}：{{ __('プレミアムプラン') }}({{ __('年額') }})" @checked(! config('services.stripe.prices.premium')) required>
                                             <span>{{ app()->isLocale('ja') ? '5,800円' : '¥5,800' }}/{{ __('年') }}</span>
                                         </label>
                                     @endif
