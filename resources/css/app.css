@@ -502,6 +502,11 @@ h2 {
     transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
+.question-auto-grow {
+    overflow-y: hidden;
+    resize: none;
+}
+
 .question-textarea {
     min-height: 180px;
     resize: vertical;

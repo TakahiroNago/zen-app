@@ -52,16 +52,16 @@
                 <form class="question-form" method="POST" action="{{ route('zen.respond') }}" data-loading-label="{{ __('読み解いています...') }}">
                     @csrf
                     <label class="question-label" for="concern">{{ __('あなたの思い') }}</label>
-                    <input
-                        class="question-input"
+                    <textarea
+                        class="question-input question-auto-grow"
                         id="concern"
-                        type="text"
                         name="concern"
-                        value="{{ old('concern') }}"
                         placeholder="{{ __('例：新しい一歩を踏み出すには？') }}"
+                        rows="1"
                         maxlength="200"
+                        data-auto-grow
                         required
-                    >
+                    >{{ old('concern') }}</textarea>
                     <p class="page-description question-privacy-note">{{ __('氏名・住所・勤務先・電話番号・メールアドレスなどの個人情報は、ご自身や他の方のものも含めて書かないでください。') }}</p>
                     @error('concern')
                         <p class="form-error" role="alert">{{ $message }}</p>

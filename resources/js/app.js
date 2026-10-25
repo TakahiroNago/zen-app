@@ -5,6 +5,16 @@ const accountMenu = document.querySelector('.account-menu');
 const accountPopover = accountMenu?.querySelector('.account-popover');
 const accountMenuTrigger = accountMenu?.querySelector('.account-menu-trigger');
 
+document.querySelectorAll('[data-auto-grow]').forEach((textarea) => {
+	const resizeTextarea = () => {
+		textarea.style.height = 'auto';
+		textarea.style.height = `${textarea.scrollHeight}px`;
+	};
+
+	textarea.addEventListener('input', resizeTextarea);
+	resizeTextarea();
+});
+
 historyTopicFilter?.addEventListener('change', () => {
 	historyTopicFilter.form?.requestSubmit();
 });
