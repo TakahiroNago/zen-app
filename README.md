@@ -124,5 +124,4 @@ AIによる対話を通じて、単に行動を指示したり、正解を押し
 
 個人開発プロジェクト
 
-- Webサイト：[Art Full Stack](https://art-full-stack.com)
 - GitHub：[TakahiroNago](https://github.com/TakahiroNago)
