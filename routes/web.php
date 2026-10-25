@@ -2,6 +2,7 @@
 <?php
 
 use App\Http\Controllers\AccountSettingsController;
+use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\GoogleAuthController;
@@ -144,6 +145,8 @@ Route::prefix('{locale}')
         });
 
         Route::prefix('admin')->name('admin.')->middleware(['auth', 'active', 'verified', 'admin'])->group(function () {
+            Route::get('/', [AdminDashboardController::class, 'index'])->name('dashboard');
+            Route::patch('/inquiries/{inquiry}/resolve', [AdminDashboardController::class, 'resolveInquiry'])->name('inquiries.resolve');
             Route::get('/users', [AdminUserController::class, 'index'])->name('users.index');
             Route::get('/users/{user}', [AdminUserController::class, 'show'])->name('users.show');
             Route::get('/users/{user}/edit', [AdminUserController::class, 'edit'])->name('users.edit');

@@ -27,7 +27,7 @@ class PromoteUserToAdmin extends Command
             return self::FAILURE;
         }
 
-        $user->forceFill(['role' => User::ROLE_ADMIN])->save();
+        $user->forceFill(['is_admin' => true])->save();
         $this->info("{$user->email} をAdminに設定しました。");
 
         return self::SUCCESS;

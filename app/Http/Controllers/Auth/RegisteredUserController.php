@@ -30,7 +30,6 @@ class RegisteredUserController extends Controller
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => $validated['password'],
-            'role' => User::ROLE_USER,
             'is_active' => true,
             'preferred_locale' => app()->getLocale(),
         ]);

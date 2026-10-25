@@ -211,7 +211,7 @@ class AccountSettingsController extends Controller
 
         DB::transaction(function () use ($billingService, $user, &$shareTokenHashes): void {
             $activeAdmins = User::query()
-                ->where('role', User::ROLE_ADMIN)
+                ->where('is_admin', true)
                 ->where('is_active', true)
                 ->orderBy('id')
                 ->lockForUpdate()

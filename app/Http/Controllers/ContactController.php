@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Mail\ContactInquiry;
+use App\Mail\ContactInquiry as ContactInquiryMail;
+use App\Models\ContactInquiry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -24,12 +25,21 @@ class ContactController extends Controller
             'message' => ['required', 'string', 'max:5000'],
         ]);
 
-        Mail::to(config('services.contact.email'))->send(new ContactInquiry(
+        $inquiry = ContactInquiry::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'subject' => $validated['subject'],
+            'message' => $validated['message'],
+        ]);
+
+        Mail::to(config('services.contact.email'))->send(new ContactInquiryMail(
             inquiryName: $validated['name'],
             replyEmail: $validated['email'],
             inquirySubject: $validated['subject'],
             inquiryMessage: $validated['message'],
         ));
+
+        $inquiry->update(['mail_sent' => true]);
 
         return to_route('contact.create')->with('status', __('お問い合わせを送信しました。'));
     }

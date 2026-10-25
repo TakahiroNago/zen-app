@@ -24,17 +24,17 @@
                     <input class="question-input" id="email" name="email" type="email" value="{{ old('email', $user->email) }}" required maxlength="255">
                     @error('email')<p class="form-error">{{ $message }}</p>@enderror
 
-                    <label class="question-label" for="role">{{ __('権限') }}</label>
+                    <label class="question-label" for="is_admin">{{ __('権限') }}</label>
                     @if (auth()->id() === $user->id)
-                        <input type="hidden" name="role" value="{{ $user->role }}">
+                        <input type="hidden" name="is_admin" value="{{ $user->is_admin ? 1 : 0 }}">
                         <p class="readonly-value">{{ $user->isAdmin() ? 'Admin' : 'User' }}{{ __('（自分自身の権限は変更できません）') }}</p>
                     @else
-                        <select class="question-input" id="role" name="role" required>
-                            <option value="user" @selected(old('role', $user->role) === 'user')>User</option>
-                            <option value="admin" @selected(old('role', $user->role) === 'admin')>Admin</option>
+                        <select class="question-input" id="is_admin" name="is_admin" required>
+                            <option value="0" @selected(! (bool) old('is_admin', $user->is_admin))>User</option>
+                            <option value="1" @selected((bool) old('is_admin', $user->is_admin))>Admin</option>
                         </select>
                     @endif
-                    @error('role')<p class="form-error">{{ $message }}</p>@enderror
+                    @error('is_admin')<p class="form-error">{{ $message }}</p>@enderror
 
                     <div class="admin-actions">
                         <button class="primary-action" type="submit">{{ __('変更を保存') }}</button>

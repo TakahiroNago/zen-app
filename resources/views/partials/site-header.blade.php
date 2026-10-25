@@ -52,6 +52,7 @@
                     <a class="account-popover-link" href="{{ route('consultations.index') }}">{{ __('相談の記録') }}</a>
                     <a class="account-popover-link" href="{{ route('account.settings.edit') }}">{{ __('アカウント設定') }}</a>
                     @if (auth()->user()->isAdmin())
+                        <a class="account-popover-link" href="{{ route('admin.dashboard') }}">{{ __('管理者画面') }}</a>
                         <a class="account-popover-link" href="{{ route('admin.users.index') }}">{{ __('ユーザー管理') }}</a>
                     @endif
                     <form method="POST" action="{{ route('logout') }}">

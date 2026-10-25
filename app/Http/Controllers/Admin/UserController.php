@@ -58,8 +58,9 @@ class UserController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
-            'role' => ['required', Rule::in([User::ROLE_USER, User::ROLE_ADMIN])],
+            'is_admin' => ['required', 'boolean'],
         ]);
+        $isAdmin = $request->boolean('is_admin');
 
         $notificationEmail = null;
         $accountWasChanged = false;
@@ -69,37 +70,38 @@ class UserController extends Controller
             $administrator,
             $user,
             $validated,
+            $isAdmin,
             &$notificationEmail,
             &$accountWasChanged,
         ): void {
             $activeAdmins = User::query()
-                ->where('role', User::ROLE_ADMIN)
+                ->where('is_admin', true)
                 ->where('is_active', true)
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
             $managedUser = User::query()->lockForUpdate()->findOrFail($user->id);
 
-            if ($managedUser->is($administrator) && $validated['role'] !== $managedUser->role) {
+            if ($managedUser->is($administrator) && $isAdmin !== $managedUser->is_admin) {
                 throw ValidationException::withMessages([
-                    'role' => __('自分自身の権限は変更できません。'),
+                    'is_admin' => __('自分自身の権限は変更できません。'),
                 ]);
             }
 
             if (
                 $managedUser->is_active
                 && $managedUser->isAdmin()
-                && $validated['role'] !== User::ROLE_ADMIN
+                && ! $isAdmin
                 && $activeAdmins->count() <= 1
             ) {
                 throw ValidationException::withMessages([
-                    'role' => __('最後の有効なAdminの権限は変更できません。'),
+                    'is_admin' => __('最後の有効なAdminの権限は変更できません。'),
                 ]);
             }
 
             $accountWasChanged = $managedUser->name !== $validated['name']
                 || $managedUser->email !== $validated['email']
-                || $managedUser->role !== $validated['role'];
+                || $managedUser->is_admin !== $isAdmin;
             if ($accountWasChanged) {
                 $notificationEmail = $managedUser->email;
             }
@@ -111,8 +113,7 @@ class UserController extends Controller
             $managedUser->fill([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
-                'role' => $validated['role'],
-            ])->save();
+            ])->forceFill(['is_admin' => $isAdmin])->save();
         });
 
         if ($accountWasChanged && is_string($notificationEmail)) {
@@ -136,7 +137,7 @@ class UserController extends Controller
         $ipAddress = $request->ip();
         DB::transaction(function () use ($user, &$notificationEmail, &$accountWasSuspended): void {
             $activeAdmins = User::query()
-                ->where('role', User::ROLE_ADMIN)
+                ->where('is_admin', true)
                 ->where('is_active', true)
                 ->orderBy('id')
                 ->lockForUpdate()

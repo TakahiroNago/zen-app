@@ -1,7 +1,10 @@
 <?php
 
 use App\Mail\ContactInquiry;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+
+uses(RefreshDatabase::class);
 
 test('the contact form is public and does not expose the recipient address', function () {
     $this->get(route('contact.create'))

@@ -24,14 +24,14 @@ test('a visitor can register and is assigned the user role', function () {
         'email' => 'new-user@example.com',
         'password' => 'A-strong-password-2026',
         'password_confirmation' => 'A-strong-password-2026',
-        'role' => User::ROLE_ADMIN,
+        'is_admin' => true,
         'is_active' => false,
     ])->assertRedirect(route('verification.notice'));
 
     $this->assertAuthenticated();
     $this->assertDatabaseHas('users', [
         'email' => 'new-user@example.com',
-        'role' => User::ROLE_USER,
+        'is_admin' => false,
         'is_active' => true,
         'email_verified_at' => null,
         'security_notifications_enabled' => false,
@@ -436,7 +436,7 @@ test('Google login creates and authenticates a verified Google account', functio
     $this->assertDatabaseHas('users', [
         'id' => $user->id,
         'google_id' => 'google-user-123',
-        'role' => User::ROLE_USER,
+        'is_admin' => false,
         'is_active' => true,
     ]);
     expect($user->email_verified_at)->not->toBeNull();

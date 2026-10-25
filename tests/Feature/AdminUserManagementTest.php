@@ -68,13 +68,13 @@ test('admins can edit user details and role without changing the password', func
         ->put(route('admin.users.update', $user), [
             'name' => 'Updated Reader',
             'email' => 'updated@example.com',
-            'role' => User::ROLE_ADMIN,
+            'is_admin' => '1',
         ])
         ->assertRedirect(route('admin.users.show', $user));
 
     $user->refresh();
     expect($user->name)->toBe('Updated Reader')
-        ->and($user->role)->toBe(User::ROLE_ADMIN)
+        ->and($user->is_admin)->toBeTrue()
         ->and(Hash::check('Original-password-2026', $user->password))->toBeTrue();
 
     Notification::assertSentOnDemand(AccountActivityNotification::class, function (
@@ -161,13 +161,13 @@ test('the last active admin cannot be demoted', function () {
         ->put(route('admin.users.update', $lastAdmin), [
             'name' => $lastAdmin->name,
             'email' => $lastAdmin->email,
-            'role' => User::ROLE_USER,
+            'is_admin' => '0',
         ])
-        ->assertSessionHasErrors('role');
+        ->assertSessionHasErrors('is_admin');
 
     $this->assertDatabaseHas('users', [
         'id' => $lastAdmin->id,
-        'role' => User::ROLE_ADMIN,
+        'is_admin' => true,
         'is_active' => true,
     ]);
 });

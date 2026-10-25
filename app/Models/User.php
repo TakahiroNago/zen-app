@@ -13,14 +13,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password', 'role', 'is_active', 'google_id', 'preferred_locale'])]
+#[Fillable(['name', 'email', 'password', 'is_active', 'google_id', 'preferred_locale'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements HasLocalePreference, MustVerifyEmail
 {
-    public const ROLE_USER = 'user';
-
-    public const ROLE_ADMIN = 'admin';
-
     public const PLAN_FREE = 'free';
 
     public const PLAN_LITE = 'lite';
@@ -47,6 +43,7 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
         return [
             'email_verified_at' => 'datetime',
             'is_active' => 'boolean',
+            'is_admin' => 'boolean',
             'security_notifications_enabled' => 'boolean',
             'security_notification_types' => 'array',
             'security_notifications_configured' => 'boolean',
@@ -62,7 +59,7 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
 
     public function isAdmin(): bool
     {
-        return $this->role === self::ROLE_ADMIN;
+        return $this->is_admin === true;
     }
 
     public function preferredLocale(): string

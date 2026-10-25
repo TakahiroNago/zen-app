@@ -70,7 +70,6 @@ class GoogleAuthController extends Controller
                 'name' => $googleUser->getName() ?: Str::before($email, '@'),
                 'email' => $email,
                 'password' => Str::random(64),
-                'role' => User::ROLE_USER,
                 'is_active' => true,
                 'google_id' => $googleId,
                 'preferred_locale' => $locale,

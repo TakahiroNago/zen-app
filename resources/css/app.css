@@ -1588,6 +1588,78 @@ h2 {
     color: #963f32;
 }
 
+.dashboard-section {
+    margin-top: 40px;
+}
+
+.dashboard-section h2 {
+    margin-bottom: 16px;
+    font-size: 24px;
+}
+
+.dashboard-section h3 {
+    margin: 24px 0 12px;
+    font-size: 16px;
+}
+
+.metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.metric {
+    padding: 14px;
+    border: 1px solid var(--color-line);
+    border-radius: 4px;
+    background: rgb(255 255 255 / 60%);
+}
+
+.metric span {
+    display: block;
+    color: var(--color-muted);
+    font-size: 11px;
+}
+
+.metric strong {
+    display: block;
+    margin-top: 6px;
+    font-size: 24px;
+}
+
+.metric strong.metric-text {
+    font-size: 15px;
+}
+
+.metric small {
+    display: block;
+    margin-top: 4px;
+    color: var(--color-muted);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+
+.error-log {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 12px;
+}
+
+.error-log li {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--color-line);
+    overflow-wrap: anywhere;
+}
+
+.inquiry-message {
+    margin: 8px 0 0;
+    max-width: 420px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
 .empty-state {
     padding-block: 32px !important;
     color: var(--color-muted);
