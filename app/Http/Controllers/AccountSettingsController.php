@@ -27,8 +27,19 @@ class AccountSettingsController extends Controller
         $user = $request->user();
         abort_unless($user instanceof User, 403);
         $notificationTypeGroups = AccountActivityNotification::configurableActivityTypeGroups();
+        $billingProductPrefix = match ($user->plan) {
+            User::PLAN_LITE => 'lite',
+            User::PLAN_PREMIUM => 'premium',
+            default => null,
+        };
+        $monthlyPrice = $billingProductPrefix !== null
+            ? config('services.stripe.prices.'.$billingProductPrefix)
+            : null;
+        $yearlyPrice = $billingProductPrefix !== null
+            ? config('services.stripe.prices.'.$billingProductPrefix.'_yearly')
+            : null;
 
-        return view('account.settings', compact('notificationTypeGroups', 'user'));
+        return view('account.settings', compact('monthlyPrice', 'notificationTypeGroups', 'user', 'yearlyPrice', 'billingProductPrefix'));
     }
 
     public function setupSecurityNotifications(Request $request): View|RedirectResponse

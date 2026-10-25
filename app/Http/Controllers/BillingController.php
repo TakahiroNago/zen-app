@@ -58,7 +58,8 @@ class BillingController extends Controller
     public function changePlan(Request $request, StripeBillingService $billingService): RedirectResponse
     {
         $validated = $request->validate([
-            'plan' => ['required', 'string', 'in:lite,premium,premium_yearly'],
+            'plan' => ['required', 'string', 'in:lite,lite_yearly,premium,premium_yearly'],
+            'timing' => ['sometimes', 'string', 'in:immediate,period_end'],
         ]);
         $user = $request->user();
         abort_unless($user instanceof User, 403);
@@ -68,7 +69,7 @@ class BillingController extends Controller
         }
 
         try {
-            $result = $billingService->changePlan($user, $validated['plan']);
+            $result = $billingService->changePlan($user, $validated['plan'], $validated['timing'] ?? 'period_end');
         } catch (ApiErrorException $exception) {
             report($exception);
 
@@ -78,8 +79,39 @@ class BillingController extends Controller
         $message = match ($result) {
             'upgraded' => __('プレミアムプランへ切り替えました。日割り分は今回の請求に反映されています。'),
             'upgrade_pending' => __('プレミアムへの変更を受け付けました。決済完了後にプランへ反映されます。'),
+            'interval_change_scheduled' => __('お支払い周期の変更を予約しました。現在の契約期間終了後に切り替わります。'),
             'downgrade_scheduled' => __('ライトプランへの変更を予約しました。現在の契約期間終了後に切り替わります。'),
+            'downgraded_immediately' => __('対象となるお支払いがある場合は未使用期間分を返金し、ライトプランへ切り替えました。'),
             default => throw new RuntimeException('Unknown subscription plan change result.'),
+        };
+
+        return to_route('account.settings.edit')->with('status', $message);
+    }
+
+    public function cancelSubscription(Request $request, StripeBillingService $billingService): RedirectResponse
+    {
+        $validated = $request->validate([
+            'timing' => ['required', 'string', 'in:immediate,period_end'],
+        ]);
+        $user = $request->user();
+        abort_unless($user instanceof User, 403);
+
+        if (! is_string(config('services.stripe.secret')) || config('services.stripe.secret') === '') {
+            return back()->withErrors(['billing' => __('決済の準備が完了していません。時間をおいて再度お試しください。')]);
+        }
+
+        try {
+            $result = $billingService->cancelSubscription($user, $validated['timing']);
+        } catch (ApiErrorException $exception) {
+            report($exception);
+
+            return back()->withErrors(['billing' => __('Stripe上の契約を確認できませんでした。時間をおいて再度お試しください。')]);
+        }
+
+        $message = match ($result) {
+            'cancellation_scheduled' => __('契約期間終了時の解約を予約しました。期間終了までは現在のプランをご利用いただけます。'),
+            'cancelled_immediately' => __('対象となるお支払いがある場合は未使用期間分を返金し、プランを解約しました。'),
+            default => throw new RuntimeException('Unknown subscription cancellation result.'),
         };
 
         return to_route('account.settings.edit')->with('status', $message);
@@ -94,8 +126,14 @@ class BillingController extends Controller
             return back()->withErrors(['billing' => __('決済の準備が完了していません。時間をおいて再度お試しください。')]);
         }
 
-        $billingService->cancelScheduledPlanChange($user);
+        $result = $billingService->cancelScheduledPlanChange($user);
 
-        return to_route('account.settings.edit')->with('status', __('予約していたプラン変更を取り消しました。'));
+        $message = $result === 'cancellation'
+            ? __('解約予約を取り消しました。')
+            : ($result === 'interval_change'
+                ? __('お支払い周期の変更予約を取り消しました。')
+                : __('予約していたプラン変更を取り消しました。'));
+
+        return to_route('account.settings.edit')->with('status', $message);
     }
 }

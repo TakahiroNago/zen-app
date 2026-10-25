@@ -35,6 +35,9 @@ test('users can update their account name independently', function () {
         ->assertOk()
         ->assertSee('アカウントを削除する')
         ->assertSee(route('account.settings.destroy'))
+        ->assertSee('type="button" data-delete-account-open', false)
+        ->assertSee('name="password" type="password" form="delete-account-form"', false)
+        ->assertSee('type="submit" form="delete-account-form" data-delete-account-confirm', false)
         ->assertSee('名前を変更')
         ->assertSee('メールアドレスを変更')
         ->assertSee(route('account.settings.email.update'));
@@ -327,7 +330,9 @@ test('account settings show the current paid plan and scheduled cancellation dat
         ->get(route('account.settings.edit'))
         ->assertOk()
         ->assertSee('現在のプラン：プレミアム')
+        ->assertSee('自動更新：オフ')
         ->assertSee($periodEnd->format('Y年n月j日').'に終了予定')
+        ->assertSee('自動更新をオンにする')
         ->assertSee('契約・お支払いを管理');
 });
 
@@ -344,6 +349,8 @@ test('account settings offer immediate upgrades and end-of-period downgrades', f
         ->assertSee('プレミアムプランへ変更')
         ->assertSee('data-plan-change-form', false)
         ->assertSee('data-plan-change-dialog', false)
+        ->assertSee('自動更新：オン')
+        ->assertSee('自動更新をオフにする')
         ->assertSee('日割り計算で今回の請求に充当されます。');
 
     $periodEnd = now()->addDays(10)->setTime(17, 30);
@@ -360,9 +367,56 @@ test('account settings offer immediate upgrades and end-of-period downgrades', f
         ->assertSeeInOrder(['ライトプランへ変更', '契約・お支払いを管理'])
         ->assertSee('data-plan-change-form', false)
         ->assertSee('data-plan-change-dialog', false)
-        ->assertSee('現在のプレミアム期間終了後に適用されます。')
+        ->assertSee('現在のプレミアム期間終了後にライトプランへ切り替えます。')
+        ->assertSee('すぐに切り替えて未使用期間分を返金')
         ->assertSee('data-confirmation-period-end-label="現在のプレミアム期間終了日時:"', false)
-        ->assertSee('data-confirmation-period-end-date="'.$periodEnd->format('Y年n月j日 H:i').'"', false);
+        ->assertSee('data-confirmation-period-end-date="'.$periodEnd->format('Y年n月j日 H:i').'"', false)
+        ->assertSee('すぐに解約して未使用期間分を返金')
+        ->assertSee('自動更新をオフにする');
+});
+
+test('account settings allow members to schedule a billing frequency change', function () {
+    config([
+        'services.stripe.secret' => 'sk_test',
+        'services.stripe.prices.lite' => 'price_lite',
+        'services.stripe.prices.lite_yearly' => 'price_lite_yearly',
+    ]);
+    $user = User::factory()->create([
+        'plan' => User::PLAN_LITE,
+        'stripe_customer_id' => 'cus_frequency',
+        'stripe_subscription_id' => 'sub_frequency',
+        'stripe_subscription_interval' => 'month',
+        'stripe_current_period_end' => now()->addDays(12),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('account.settings.edit'))
+        ->assertOk()
+        ->assertSee('お支払い周期')
+        ->assertSee('月額・年額を切り替える')
+        ->assertSee('value="lite_yearly"', false)
+        ->assertSee('お支払い周期の変更は現在の契約期間終了後に適用されます。')
+        ->assertSee('現在の契約期間終了日時:', false);
+});
+
+test('account settings show and allow cancellation of a scheduled billing frequency change', function () {
+    $user = User::factory()->create([
+        'plan' => User::PLAN_PREMIUM,
+        'stripe_customer_id' => 'cus_frequency_scheduled',
+        'stripe_subscription_id' => 'sub_frequency_scheduled',
+        'stripe_subscription_interval' => 'month',
+        'stripe_scheduled_interval' => 'year',
+        'stripe_subscription_schedule_id' => 'sched_frequency',
+        'stripe_current_period_end' => now()->addDays(8),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('account.settings.edit'))
+        ->assertOk()
+        ->assertSee('年額へ変更予定')
+        ->assertSee('予約を取り消す')
+        ->assertSee(route('billing.plan.cancel'))
+        ->assertDontSee('月額・年額を切り替える');
 });
 
 test('account settings show and allow cancellation of a scheduled downgrade', function () {

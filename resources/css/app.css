@@ -1412,6 +1412,11 @@ h2 {
     line-height: 1.8;
 }
 
+.account-deletion-section h2,
+.account-deletion-section > p {
+    color: #963f32;
+}
+
 .account-settings-section .question-form {
     max-width: 560px;
 }
@@ -1500,6 +1505,19 @@ h2 {
 
 .confirm-dialog .danger-title {
     color: #963f32;
+}
+
+.confirm-dialog .question-label,
+.confirm-dialog .question-input {
+    display: block;
+}
+
+.confirm-dialog .question-label {
+    margin-bottom: 8px;
+}
+
+.confirm-dialog .question-input {
+    margin-bottom: 16px;
 }
 
 .confirm-dialog p {

@@ -145,20 +145,21 @@ class StripeBillingService
         return $session->url;
     }
 
-    public function changePlan(User $user, string $targetProduct): string
+    public function changePlan(User $user, string $targetProduct, string $timing = 'period_end'): string
     {
         $product = $this->products()[$targetProduct] ?? null;
         $targetPlan = $product['plan'] ?? null;
         if (
-            ! in_array($targetProduct, ['lite', 'premium', 'premium_yearly'], true)
+            ! in_array($targetProduct, ['lite', 'lite_yearly', 'premium', 'premium_yearly'], true)
             || ! in_array($targetPlan, [User::PLAN_LITE, User::PLAN_PREMIUM], true)
+            || ! in_array($timing, ['immediate', 'period_end'], true)
         ) {
             throw ValidationException::withMessages([
                 'billing' => '選択したプランは変更できません。',
             ]);
         }
 
-        return DB::transaction(function () use ($user, $targetPlan, $targetProduct): string {
+        return DB::transaction(function () use ($user, $targetPlan, $targetProduct, $timing): string {
             $account = User::query()->lockForUpdate()->findOrFail($user->id);
 
             if (
@@ -172,16 +173,21 @@ class StripeBillingService
                 ]);
             }
 
-            if ($account->stripe_scheduled_plan !== null || $account->stripe_cancel_at_period_end) {
+            if (
+                $account->stripe_scheduled_plan !== null
+                || $account->stripe_scheduled_interval !== null
+                || $account->stripe_cancel_at_period_end
+            ) {
                 throw ValidationException::withMessages([
                     'billing' => '予約済みの変更または解約があります。先に現在の契約状態をご確認ください。',
                 ]);
             }
 
-            if (
-                ($account->plan === User::PLAN_LITE && $targetPlan !== User::PLAN_PREMIUM)
-                || ($account->plan === User::PLAN_PREMIUM && $targetPlan !== User::PLAN_LITE)
-            ) {
+            $isIntervalChange = $targetPlan === $account->plan;
+            if (! $isIntervalChange && ! (
+                ($account->plan === User::PLAN_LITE && $targetPlan === User::PLAN_PREMIUM)
+                || ($account->plan === User::PLAN_PREMIUM && $targetPlan === User::PLAN_LITE)
+            )) {
                 throw ValidationException::withMessages([
                     'billing' => '現在のプランから選択したプランへは変更できません。',
                 ]);
@@ -235,7 +241,20 @@ class StripeBillingService
                 ]);
             }
 
-            if ($targetPlan === User::PLAN_PREMIUM) {
+            $currentInterval = $this->intervalForPrice($currentPriceId);
+            $targetInterval = $this->intervalForPrice($targetPriceId);
+            if (
+                $currentInterval === null
+                || $targetInterval === null
+                || ($isIntervalChange && $currentInterval === $targetInterval)
+                || ($isIntervalChange && $timing !== 'period_end')
+            ) {
+                throw ValidationException::withMessages([
+                    'billing' => '選択したお支払い周期へ変更できません。',
+                ]);
+            }
+
+            if (! $isIntervalChange && $targetPlan === User::PLAN_PREMIUM) {
                 try {
                     $updatedSubscription = $stripe->subscriptions->update($subscription->id, [
                         'items' => [[
@@ -254,6 +273,38 @@ class StripeBillingService
                 }
 
                 return isset($updatedSubscription->pending_update) ? 'upgrade_pending' : 'upgraded';
+            }
+
+            if (! $isIntervalChange && $timing === 'immediate') {
+                try {
+                    $updatedSubscription = $stripe->subscriptions->update($subscription->id, [
+                        'items' => [[
+                            'id' => $subscriptionItem->id,
+                            'price' => $targetPriceId,
+                        ]],
+                        'billing_cycle_anchor' => 'now',
+                        'proration_behavior' => 'none',
+                        'payment_behavior' => 'error_if_incomplete',
+                    ]);
+                } catch (ApiErrorException $exception) {
+                    report($exception);
+
+                    throw ValidationException::withMessages([
+                        'billing' => 'ライトプランへの即時切り替えに失敗しました。現在の契約は変更されていません。',
+                    ]);
+                }
+
+                try {
+                    $this->refundUnusedPeriod($stripe, $subscription, $subscriptionItem, $account);
+                } catch (ApiErrorException|RuntimeException $exception) {
+                    report($exception);
+
+                    throw ValidationException::withMessages([
+                        'billing' => 'ライトプランへの切り替えは完了しましたが、未使用期間分の返金を完了できませんでした。サポートへお問い合わせください。',
+                    ]);
+                }
+
+                return 'downgraded_immediately';
             }
 
             $periodEnd = $subscription->current_period_end
@@ -318,41 +369,279 @@ class StripeBillingService
                 throw $exception;
             }
 
-            $account->stripe_scheduled_plan = $targetPlan;
+            $account->stripe_scheduled_plan = $isIntervalChange ? null : $targetPlan;
+            $account->stripe_scheduled_interval = $isIntervalChange ? $targetInterval : null;
             $account->stripe_subscription_schedule_id = $schedule->id;
             $account->stripe_current_period_end = date('Y-m-d H:i:s', (int) $periodEnd);
             $account->save();
 
-            return 'downgrade_scheduled';
+            return $isIntervalChange ? 'interval_change_scheduled' : 'downgrade_scheduled';
         });
     }
 
-    public function cancelScheduledPlanChange(User $user): void
+    public function cancelSubscription(User $user, string $timing): string
+    {
+        if (! in_array($timing, ['immediate', 'period_end'], true)) {
+            throw ValidationException::withMessages([
+                'billing' => '解約時期を選択してください。',
+            ]);
+        }
+
+        return DB::transaction(function () use ($user, $timing): string {
+            $account = User::query()->lockForUpdate()->findOrFail($user->id);
+            if (
+                ! is_string($account->stripe_customer_id)
+                || $account->stripe_customer_id === ''
+                || ! is_string($account->stripe_subscription_id)
+                || $account->stripe_subscription_id === ''
+                || ! in_array($account->plan, [User::PLAN_LITE, User::PLAN_PREMIUM], true)
+            ) {
+                throw ValidationException::withMessages([
+                    'billing' => '解約できる有料プランの契約が見つかりません。',
+                ]);
+            }
+
+            if (
+                $account->stripe_scheduled_plan !== null
+                || $account->stripe_scheduled_interval !== null
+                || $account->stripe_cancel_at_period_end
+            ) {
+                throw ValidationException::withMessages([
+                    'billing' => '予約済みの変更または解約があります。現在の契約状態をご確認ください。',
+                ]);
+            }
+
+            $stripe = $this->stripe();
+            $subscription = $stripe->subscriptions->retrieve($account->stripe_subscription_id, [
+                'expand' => [
+                    'latest_invoice.payments.data.payment.charge',
+                    'latest_invoice.payments.data.payment.payment_intent.latest_charge',
+                ],
+            ]);
+            if (
+                $subscription->customer !== $account->stripe_customer_id
+                || ! in_array($subscription->status, ['active', 'trialing'], true)
+                || (bool) ($subscription->cancel_at_period_end ?? false)
+                || isset($subscription->schedule)
+                || isset($subscription->pending_update)
+            ) {
+                throw ValidationException::withMessages([
+                    'billing' => 'Stripe上の契約状態を確認できません。時間をおいて再度お試しください。',
+                ]);
+            }
+
+            $items = $subscription->items->data ?? [];
+            if (count($items) !== 1 || $this->planForPrice($items[0]->price->id ?? null) !== $account->plan) {
+                throw ValidationException::withMessages([
+                    'billing' => 'アプリとStripeの契約情報が一致しません。時間をおいて再度お試しください。',
+                ]);
+            }
+
+            if ($timing === 'period_end') {
+                try {
+                    $stripe->subscriptions->update($subscription->id, ['cancel_at_period_end' => true]);
+                } catch (ApiErrorException $exception) {
+                    report($exception);
+
+                    throw ValidationException::withMessages([
+                        'billing' => '解約を予約できませんでした。時間をおいて再度お試しください。',
+                    ]);
+                }
+
+                $periodEnd = $subscription->current_period_end
+                    ?? $items[0]->current_period_end
+                    ?? null;
+                $account->stripe_cancel_at_period_end = true;
+                $account->stripe_current_period_end = is_numeric($periodEnd)
+                    ? date('Y-m-d H:i:s', (int) $periodEnd)
+                    : $account->stripe_current_period_end;
+                $account->save();
+
+                return 'cancellation_scheduled';
+            }
+
+            try {
+                $stripe->subscriptions->cancel($subscription->id);
+            } catch (ApiErrorException $exception) {
+                report($exception);
+
+                throw ValidationException::withMessages([
+                    'billing' => '即時解約に失敗しました。現在の契約は変更されていません。',
+                ]);
+            }
+
+            try {
+                $this->refundUnusedPeriod($stripe, $subscription, $items[0], $account);
+            } catch (ApiErrorException|RuntimeException $exception) {
+                report($exception);
+
+                throw ValidationException::withMessages([
+                    'billing' => '即時解約は完了しましたが、未使用期間分の返金を完了できませんでした。サポートへお問い合わせください。',
+                ]);
+            }
+
+            return 'cancelled_immediately';
+        });
+    }
+
+    private function refundUnusedPeriod(StripeClient $stripe, object $subscription, object $subscriptionItem, User $account): int
+    {
+        $periodStart = $subscription->current_period_start
+            ?? $subscriptionItem->current_period_start
+            ?? null;
+        $periodEnd = $subscription->current_period_end
+            ?? $subscriptionItem->current_period_end
+            ?? null;
+        $now = now()->timestamp;
+        if (! is_numeric($periodStart) || ! is_numeric($periodEnd) || (int) $periodEnd <= $now || (int) $periodEnd <= (int) $periodStart) {
+            throw new RuntimeException('Stripe subscription does not contain a refundable billing period.');
+        }
+
+        $latestInvoice = $subscription->latest_invoice ?? null;
+        if (is_string($latestInvoice) && $latestInvoice !== '') {
+            $latestInvoice = $stripe->invoices->retrieve($latestInvoice, [
+                'expand' => [
+                    'payments.data.payment.charge',
+                    'payments.data.payment.payment_intent.latest_charge',
+                ],
+            ]);
+        }
+        if (! is_object($latestInvoice)) {
+            throw new RuntimeException('Stripe subscription does not have an invoice available for refund.');
+        }
+
+        $paidInvoicePayments = array_values(array_filter(
+            $latestInvoice->payments->data ?? [],
+            static fn (object $payment): bool => ($payment->status ?? null) === 'paid',
+        ));
+        if (count($paidInvoicePayments) > 1) {
+            throw new RuntimeException('Stripe invoice has multiple paid payments and cannot be refunded automatically.');
+        }
+
+        $invoicePayment = $paidInvoicePayments[0] ?? null;
+        $payment = $invoicePayment->payment ?? null;
+        $paymentIntent = is_object($payment)
+            ? ($payment->payment_intent ?? null)
+            : ($latestInvoice->payment_intent ?? null);
+        $paymentIntentId = is_string($paymentIntent) ? $paymentIntent : ($paymentIntent->id ?? null);
+        $charge = is_object($payment) ? ($payment->charge ?? null) : null;
+        if (! is_object($charge) && is_object($paymentIntent)) {
+            $charge ??= $paymentIntent->latest_charge ?? null;
+        }
+        if ($charge === null && is_object($payment)) {
+            $charge = $payment->charge ?? null;
+        }
+        $amountPaid = $latestInvoice->amount_paid ?? null;
+        $invoiceSubscription = $latestInvoice->subscription ?? null;
+        $invoiceSubscription ??= $latestInvoice->parent->subscription_details->subscription ?? null;
+        $invoiceSubscriptionId = is_string($invoiceSubscription)
+            ? $invoiceSubscription
+            : ($invoiceSubscription->id ?? null);
+        if (
+            ($latestInvoice->status ?? null) !== 'paid'
+            || ! is_string($latestInvoice->currency ?? null)
+            || $latestInvoice->currency === ''
+            || ! is_numeric($amountPaid)
+            || (int) $amountPaid < 0
+            || $invoiceSubscriptionId !== $subscription->id
+        ) {
+            throw new RuntimeException('Stripe did not return a paid invoice eligible for a prorated refund.');
+        }
+        $paymentAmount = $invoicePayment->amount_paid ?? $amountPaid;
+        if (! is_numeric($paymentAmount) || (int) $paymentAmount < 0) {
+            throw new RuntimeException('Stripe did not return a refundable invoice payment amount.');
+        }
+        if ((int) $paymentAmount === 0) {
+            return 0;
+        }
+        if (! is_string($paymentIntentId) || $paymentIntentId === '') {
+            if (! is_string($charge) || $charge === '') {
+                throw new RuntimeException('Stripe did not return a paid invoice eligible for a prorated refund.');
+            }
+        }
+
+        $chargeId = is_string($charge) ? $charge : ($charge->id ?? null);
+        if (is_string($chargeId) && ! is_object($charge)) {
+            $charge = $stripe->charges->retrieve($chargeId);
+        }
+        $alreadyRefunded = is_object($charge) ? ($charge->amount_refunded ?? 0) : 0;
+        if (! is_string($chargeId) || ! is_numeric($alreadyRefunded)) {
+            throw new RuntimeException('Stripe did not return the latest charge refund status.');
+        }
+
+        $unusedSeconds = (int) $periodEnd - max($now, (int) $periodStart);
+        $periodSeconds = (int) $periodEnd - (int) $periodStart;
+        $targetRefundAmount = (int) round((int) $paymentAmount * $unusedSeconds / $periodSeconds);
+        $refundAmount = min(
+            max(0, (int) $paymentAmount - (int) $alreadyRefunded),
+            max(0, $targetRefundAmount - (int) $alreadyRefunded),
+        );
+        if ($refundAmount <= 0) {
+            return 0;
+        }
+
+        $refundSource = is_string($paymentIntentId) && $paymentIntentId !== ''
+            ? ['payment_intent' => $paymentIntentId]
+            : ['charge' => $chargeId];
+        $stripe->refunds->create([
+            ...$refundSource,
+            'amount' => $refundAmount,
+        ], [
+            'idempotency_key' => 'unused-period-refund-'.$account->id.'-'.$subscription->id.'-'.$periodEnd,
+        ]);
+
+        return $refundAmount;
+    }
+
+    public function cancelScheduledPlanChange(User $user): string
     {
         $account = User::query()->findOrFail($user->id);
         if (
-            ! is_string($account->stripe_subscription_schedule_id)
-            || $account->stripe_subscription_schedule_id === ''
-            || $account->stripe_scheduled_plan === null
+            is_string($account->stripe_subscription_schedule_id)
+            && $account->stripe_subscription_schedule_id !== ''
+            && ($account->stripe_scheduled_plan !== null || $account->stripe_scheduled_interval !== null)
         ) {
-            throw ValidationException::withMessages([
-                'billing' => '取り消せるプラン変更の予約がありません。',
-            ]);
+            $isIntervalChange = $account->stripe_scheduled_interval !== null;
+            try {
+                $this->stripe()->subscriptionSchedules->release($account->stripe_subscription_schedule_id);
+            } catch (ApiErrorException $exception) {
+                report($exception);
+
+                throw ValidationException::withMessages([
+                    'billing' => 'プラン変更の予約を取り消せませんでした。時間をおいて再度お試しください。',
+                ]);
+            }
+
+            $account->stripe_scheduled_plan = null;
+            $account->stripe_scheduled_interval = null;
+            $account->stripe_subscription_schedule_id = null;
+            $account->save();
+
+            return $isIntervalChange ? 'interval_change' : 'plan_change';
         }
 
-        try {
-            $this->stripe()->subscriptionSchedules->release($account->stripe_subscription_schedule_id);
-        } catch (ApiErrorException $exception) {
-            report($exception);
+        if ($account->stripe_cancel_at_period_end && is_string($account->stripe_subscription_id)) {
+            try {
+                $this->stripe()->subscriptions->update($account->stripe_subscription_id, [
+                    'cancel_at_period_end' => false,
+                ]);
+            } catch (ApiErrorException $exception) {
+                report($exception);
 
-            throw ValidationException::withMessages([
-                'billing' => 'プラン変更の予約を取り消せませんでした。時間をおいて再度お試しください。',
-            ]);
+                throw ValidationException::withMessages([
+                    'billing' => '解約予約を取り消せませんでした。時間をおいて再度お試しください。',
+                ]);
+            }
+
+            $account->stripe_cancel_at_period_end = false;
+            $account->save();
+
+            return 'cancellation';
         }
 
-        $account->stripe_scheduled_plan = null;
-        $account->stripe_subscription_schedule_id = null;
-        $account->save();
+        throw ValidationException::withMessages([
+            'billing' => '取り消せる変更または解約の予約がありません。',
+        ]);
     }
 
     /**
@@ -481,21 +770,34 @@ class StripeBillingService
             }
 
             foreach (array_unique($subscriptionIds) as $subscriptionId) {
-                $subscription = $stripe->subscriptions->retrieve($subscriptionId);
+                $subscription = $stripe->subscriptions->retrieve($subscriptionId, [
+                    'expand' => [
+                        'latest_invoice.payments.data.payment.charge',
+                        'latest_invoice.payments.data.payment.payment_intent.latest_charge',
+                    ],
+                ]);
 
-                if (! in_array($subscription->status, ['canceled', 'incomplete_expired'], true)) {
-                    $stripe->subscriptions->cancel($subscriptionId);
+                if (in_array($subscription->status, ['canceled', 'incomplete_expired'], true)) {
+                    continue;
                 }
+
+                // 返金を先に行う。失敗時は削除を中止し、再試行しても冪等に処理される。
+                $item = ($subscription->items->data ?? [])[0] ?? null;
+                if ($subscriptionId === $user->stripe_subscription_id && $subscription->status === 'active' && is_object($item)) {
+                    $this->refundUnusedPeriod($stripe, $subscription, $item, $user);
+                }
+
+                $stripe->subscriptions->cancel($subscriptionId);
             }
 
             if (is_string($user->stripe_customer_id)) {
                 $stripe->customers->delete($user->stripe_customer_id);
             }
-        } catch (ApiErrorException $exception) {
+        } catch (ApiErrorException|RuntimeException $exception) {
             report($exception);
 
             throw ValidationException::withMessages([
-                'account' => '決済サービスの契約を停止できなかったため、アカウントは削除されませんでした。時間をおいて再度お試しください。',
+                'account' => '決済サービスの契約を停止または返金できなかったため、アカウントは削除されませんでした。時間をおいて再度お試しください。',
             ]);
         }
     }
@@ -654,6 +956,7 @@ class StripeBillingService
 
         $priceId = $subscription->items->data[0]->price->id ?? null;
         $plan = $this->planForPrice($priceId);
+        $interval = $this->intervalForPrice($priceId);
         $isEntitled = in_array($status, ['active', 'trialing'], true) && $plan !== null;
         $periodEnd = $subscription->current_period_end
             ?? $subscription->items->data[0]->current_period_end
@@ -664,6 +967,7 @@ class StripeBillingService
         $user->stripe_subscription_id = $eventType === 'customer.subscription.deleted' ? null : $subscriptionId;
         $user->stripe_pending_subscription_checkout_id = null;
         $user->stripe_pending_subscription_product = null;
+        $user->stripe_subscription_interval = $isEntitled ? $interval : null;
         $user->stripe_subscription_status = $status;
         $user->stripe_current_period_end = is_numeric($periodEnd) ? date('Y-m-d H:i:s', (int) $periodEnd) : null;
         $user->stripe_subscription_event_created_at = date('Y-m-d H:i:s', $eventCreatedAt);
@@ -671,8 +975,10 @@ class StripeBillingService
         if (
             $eventType === 'customer.subscription.deleted'
             || ($user->stripe_scheduled_plan !== null && $user->stripe_scheduled_plan === $plan)
+            || ($user->stripe_scheduled_interval !== null && $user->stripe_scheduled_interval === $interval)
         ) {
             $user->stripe_scheduled_plan = null;
+            $user->stripe_scheduled_interval = null;
             $user->stripe_subscription_schedule_id = null;
         }
         if ($eventType === 'customer.subscription.deleted') {
@@ -699,6 +1005,7 @@ class StripeBillingService
         }
 
         $user->stripe_scheduled_plan = null;
+        $user->stripe_scheduled_interval = null;
         $user->stripe_subscription_schedule_id = null;
         $user->save();
     }
@@ -714,6 +1021,21 @@ class StripeBillingService
             config('services.stripe.prices.lite_yearly') => User::PLAN_LITE,
             config('services.stripe.prices.premium') => User::PLAN_PREMIUM,
             config('services.stripe.prices.premium_yearly') => User::PLAN_PREMIUM,
+            default => null,
+        };
+    }
+
+    private function intervalForPrice(mixed $priceId): ?string
+    {
+        if (! is_string($priceId)) {
+            return null;
+        }
+
+        return match ($priceId) {
+            config('services.stripe.prices.lite'),
+            config('services.stripe.prices.premium') => 'month',
+            config('services.stripe.prices.lite_yearly'),
+            config('services.stripe.prices.premium_yearly') => 'year',
             default => null,
         };
     }

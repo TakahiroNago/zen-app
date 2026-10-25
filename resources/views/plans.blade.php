@@ -25,7 +25,7 @@
 
                 @auth
                     <p class="form-notice credit-notice" role="status">
-                        {{ __('現在のプラン') }}{{ app()->isLocale('ja') ? '：' : ': ' }}{{ auth()->user()->plan === \App\Models\User::PLAN_PREMIUM ? __('プレミアムプラン') : (auth()->user()->plan === \App\Models\User::PLAN_LITE ? __('ライトプラン') : __('無料会員')) }}
+                        {{ __('現在のプラン') }}{{ app()->isLocale('ja') ? '：' : ': ' }}{{ auth()->user()->plan === \App\Models\User::PLAN_PREMIUM ? __('プレミアムプラン') : (auth()->user()->plan === \App\Models\User::PLAN_LITE ? __('ライトプラン') : __('無料会員')) }}{{ auth()->user()->stripe_subscription_interval === 'year' ? '('.__('年額').')' : (auth()->user()->stripe_subscription_interval === 'month' ? '('.__('月額').')' : '') }}
                         @if (auth()->user()->stripe_subscription_id !== null && auth()->user()->stripe_cancel_at_period_end && auth()->user()->stripe_current_period_end)
                             ({{ app()->isLocale('ja') ? auth()->user()->stripe_current_period_end->format('Y年n月j日').'に終了予定' : __('契約終了予定: :date', ['date' => auth()->user()->stripe_current_period_end->format('M j, Y')]) }})
                         @endif
@@ -137,7 +137,7 @@
 
                 @auth
                     <p class="page-description">
-                        {{ __('プランの解約・変更は') }}<a href="{{ route('account.settings.edit') }}"><strong>{{ __('アカウント設定') }}</strong></a>{{ __('から手続きできます。解約後も、お支払い済み期間の終了までは有料機能をご利用いただけます。') }}
+                        {{ __('プランの変更・解約は') }}<a href="{{ route('account.settings.edit') }}"><strong>{{ __('アカウント設定') }}</strong></a>{{ __('から手続きできます。解約後も、お支払い済み期間の終了までは有料機能をご利用いただけます。') }}
                     </p>
                 @endauth
                 <a class="text-link" href="{{ route('zen') }}">→ {{ __('相談に戻る') }}</a>

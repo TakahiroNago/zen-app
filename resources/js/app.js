@@ -65,7 +65,15 @@ if (planChangeDialog) {
 
 			event.preventDefault();
 			pendingPlanChangeForm = form;
-			const confirmationNotes = [form.dataset.confirmationNote];
+			const confirmationNotes = [];
+			if (form.dataset.confirmationNote) {
+				confirmationNotes.push(form.dataset.confirmationNote);
+			}
+
+			const selectedOption = form.querySelector('input[name="timing"]:checked');
+			if (selectedOption?.dataset.confirmationNote) {
+				confirmationNotes.push(selectedOption.dataset.confirmationNote);
+			}
 
 			if (form.dataset.confirmationPeriodEndLabel && form.dataset.confirmationPeriodEndDate) {
 				confirmationNotes.push(`${form.dataset.confirmationPeriodEndLabel}\n${form.dataset.confirmationPeriodEndDate}`);
@@ -176,11 +184,24 @@ if (accountSettingsNotice) {
 	const deleteAccountDialog = document.querySelector('[data-delete-account-dialog]');
 
 	if (deleteAccountForm && deleteAccountDialog) {
+		const deleteAccountOpenButton = deleteAccountForm.querySelector('[data-delete-account-open]');
+		const deleteAccountPassword = deleteAccountDialog.querySelector('[data-delete-account-password]');
+		const deleteAccountError = deleteAccountDialog.querySelector('[data-delete-account-error]');
+		const deleteAccountConfirmButton = deleteAccountDialog.querySelector('[data-delete-account-confirm]');
+
+		deleteAccountOpenButton.addEventListener('click', () => {
+			deleteAccountError.hidden = true;
+			deleteAccountError.textContent = '';
+			deleteAccountPassword.value = '';
+			deleteAccountDialog.showModal();
+			deleteAccountPassword.focus();
+		});
+
 		deleteAccountForm.addEventListener('submit', async (event) => {
 			event.preventDefault();
-
-			const submitButton = deleteAccountForm.querySelector('button[type="submit"]');
-			submitButton.disabled = true;
+			deleteAccountError.hidden = true;
+			deleteAccountConfirmButton.disabled = true;
+			deleteAccountForm.setAttribute('aria-busy', 'true');
 
 			const verificationData = new FormData(deleteAccountForm);
 			verificationData.delete('_method');
@@ -197,7 +218,8 @@ if (accountSettingsNotice) {
 				});
 
 				if (response.ok) {
-					deleteAccountDialog.showModal();
+					deleteAccountDialog.close();
+					deleteAccountForm.submit();
 					return;
 				}
 
@@ -210,20 +232,24 @@ if (accountSettingsNotice) {
 					// Keep the generic message when the response is not JSON.
 				}
 
-				showNotice(message, true);
+				deleteAccountError.textContent = message;
+				deleteAccountError.hidden = false;
+				deleteAccountPassword.focus();
 			} catch {
-				showNotice(accountSettingsNotice.dataset.errorMessage, true);
+				deleteAccountError.textContent = accountSettingsNotice.dataset.errorMessage;
+				deleteAccountError.hidden = false;
+				deleteAccountPassword.focus();
 			} finally {
-				submitButton.disabled = false;
+				deleteAccountConfirmButton.disabled = false;
+				deleteAccountForm.removeAttribute('aria-busy');
 			}
 		});
 
 		deleteAccountDialog.querySelector('[data-delete-account-cancel]').addEventListener('click', () => {
 			deleteAccountDialog.close();
-		});
-
-		deleteAccountDialog.querySelector('[data-delete-account-confirm]').addEventListener('click', () => {
-			deleteAccountForm.submit();
+			deleteAccountPassword.value = '';
+			deleteAccountError.hidden = true;
+			deleteAccountError.textContent = '';
 		});
 	}
 }

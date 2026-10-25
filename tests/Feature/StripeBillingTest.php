@@ -28,6 +28,29 @@ test('free members see their current plan even when they have a Stripe customer'
         ->assertDontSee('契約・お支払いを管理');
 });
 
+test('paid subscribers see their billing interval on the plans and account settings pages', function () {
+    foreach ([
+        ['month', '月額'],
+        ['year', '年額'],
+    ] as [$interval, $label]) {
+        $user = User::factory()->create([
+            'plan' => User::PLAN_PREMIUM,
+            'stripe_customer_id' => 'cus_interval_'.$interval,
+            'stripe_subscription_id' => 'sub_interval_'.$interval,
+            'stripe_subscription_interval' => $interval,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('plans'))
+            ->assertOk()
+            ->assertSee('現在のプラン：プレミアムプラン('.$label.')');
+
+        $this->get(route('account.settings.edit'))
+            ->assertOk()
+            ->assertSee('現在のプラン：プレミアム('.$label.')');
+    }
+});
+
 test('free members can check out lite and premium plans and receive the plan after Stripe confirms the subscription', function () {
     config([
         'services.stripe.secret' => 'sk_test',
@@ -66,11 +89,11 @@ test('free members can check out lite and premium plans and receive the plan aft
 
     try {
         foreach ([
-            ['lite', User::PLAN_LITE, 'price_lite'],
-            ['lite_yearly', User::PLAN_LITE, 'price_lite_yearly'],
-            ['premium', User::PLAN_PREMIUM, 'price_premium'],
-            ['premium_yearly', User::PLAN_PREMIUM, 'price_premium_yearly'],
-        ] as [$product, $expectedPlan, $priceId]) {
+            ['lite', User::PLAN_LITE, 'price_lite', 'month'],
+            ['lite_yearly', User::PLAN_LITE, 'price_lite_yearly', 'year'],
+            ['premium', User::PLAN_PREMIUM, 'price_premium', 'month'],
+            ['premium_yearly', User::PLAN_PREMIUM, 'price_premium_yearly', 'year'],
+        ] as [$product, $expectedPlan, $priceId, $expectedInterval]) {
             $user = User::factory()->create();
 
             $this->actingAs($user)
@@ -121,6 +144,7 @@ test('free members can check out lite and premium plans and receive the plan aft
 
             expect($user->fresh()->plan)->toBe($expectedPlan)
                 ->and($user->fresh()->stripe_subscription_id)->toBe('sub_'.$product)
+                ->and($user->fresh()->stripe_subscription_interval)->toBe($expectedInterval)
                 ->and($user->fresh()->stripe_pending_subscription_checkout_id)->toBeNull()
                 ->and($user->fresh()->stripe_pending_subscription_product)->toBeNull();
         }
@@ -544,6 +568,353 @@ test('premium members can schedule a lite downgrade for the current period end',
     }
 });
 
+test('members can schedule a monthly to annual billing frequency change at period end', function () {
+    config([
+        'services.stripe.secret' => 'sk_test',
+        'services.stripe.prices.lite' => 'price_lite',
+        'services.stripe.prices.lite_yearly' => 'price_lite_yearly',
+    ]);
+    $periodStart = now()->subDays(10)->timestamp;
+    $periodEnd = now()->addDays(20)->timestamp;
+    $httpClient = new class($periodStart, $periodEnd) implements ClientInterface
+    {
+        public array $requests = [];
+
+        public function __construct(private int $periodStart, private int $periodEnd) {}
+
+        public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1', $maxNetworkRetries = null)
+        {
+            $this->requests[] = compact('method', 'absUrl', 'params');
+            if (str_contains($absUrl, '/v1/subscriptions/sub_frequency')) {
+                $response = [
+                    'id' => 'sub_frequency',
+                    'object' => 'subscription',
+                    'customer' => 'cus_frequency',
+                    'status' => 'active',
+                    'current_period_start' => $this->periodStart,
+                    'current_period_end' => $this->periodEnd,
+                    'cancel_at_period_end' => false,
+                    'items' => [
+                        'object' => 'list',
+                        'data' => [[
+                            'id' => 'si_frequency',
+                            'object' => 'subscription_item',
+                            'price' => ['id' => 'price_lite', 'object' => 'price'],
+                            'quantity' => 1,
+                        ]],
+                    ],
+                ];
+            } elseif ($method === 'post' && str_ends_with($absUrl, '/v1/subscription_schedules')) {
+                $response = [
+                    'id' => 'sched_frequency',
+                    'object' => 'subscription_schedule',
+                    'phases' => [[
+                        'start_date' => $this->periodStart,
+                        'end_date' => $this->periodEnd,
+                        'items' => [[
+                            'price' => 'price_lite',
+                            'quantity' => 1,
+                            'tax_rates' => [],
+                        ]],
+                    ]],
+                ];
+            } else {
+                $response = [
+                    'id' => 'sched_frequency',
+                    'object' => 'subscription_schedule',
+                    'status' => 'active',
+                ];
+            }
+
+            return [json_encode($response, JSON_THROW_ON_ERROR), 200, ['Content-Type' => 'application/json']];
+        }
+    };
+    ApiRequestor::setHttpClient($httpClient);
+
+    try {
+        $user = User::factory()->create([
+            'plan' => User::PLAN_LITE,
+            'stripe_customer_id' => 'cus_frequency',
+            'stripe_subscription_id' => 'sub_frequency',
+            'stripe_subscription_interval' => 'month',
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('billing.plan.change'), ['plan' => 'lite_yearly', 'timing' => 'period_end'])
+            ->assertRedirect(route('account.settings.edit'))
+            ->assertSessionHas('status', 'お支払い周期の変更を予約しました。現在の契約期間終了後に切り替わります。');
+
+        expect($httpClient->requests)->toHaveCount(3)
+            ->and($httpClient->requests[2]['params']['phases'][1]['start_date'])->toBe($periodEnd)
+            ->and($httpClient->requests[2]['params']['phases'][1]['items'][0]['price'])->toBe('price_lite_yearly')
+            ->and($user->fresh()->stripe_scheduled_interval)->toBe('year')
+            ->and($user->fresh()->stripe_scheduled_plan)->toBeNull()
+            ->and($user->fresh()->stripe_subscription_schedule_id)->toBe('sched_frequency')
+            ->and($user->fresh()->plan)->toBe(User::PLAN_LITE);
+    } finally {
+        ApiRequestor::setHttpClient(new CurlClient);
+    }
+});
+
+test('premium members can switch to lite immediately and receive a prorated refund', function () {
+    config([
+        'services.stripe.secret' => 'sk_test',
+        'services.stripe.prices.premium' => 'price_premium',
+        'services.stripe.prices.lite' => 'price_lite',
+    ]);
+    $periodStart = now()->subDays(10)->timestamp;
+    $periodEnd = now()->addDays(20)->timestamp;
+    $httpClient = new class($periodStart, $periodEnd) implements ClientInterface
+    {
+        public array $requests = [];
+
+        public function __construct(private int $periodStart, private int $periodEnd) {}
+
+        public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1', $maxNetworkRetries = null)
+        {
+            $this->requests[] = compact('method', 'absUrl', 'params');
+            if ($method === 'get' && str_contains($absUrl, '/v1/subscriptions/sub_premium')) {
+                $response = [
+                    'id' => 'sub_premium',
+                    'object' => 'subscription',
+                    'customer' => 'cus_premium',
+                    'status' => 'active',
+                    'current_period_start' => $this->periodStart,
+                    'current_period_end' => $this->periodEnd,
+                    'latest_invoice' => 'in_premium',
+                    'items' => ['data' => [[
+                        'id' => 'si_premium',
+                        'price' => ['id' => 'price_premium'],
+                    ]]],
+                ];
+            } elseif ($method === 'post' && str_contains($absUrl, '/v1/subscriptions/sub_premium')) {
+                $response = ['id' => 'sub_premium', 'object' => 'subscription', 'status' => 'active'];
+            } elseif ($method === 'get' && str_contains($absUrl, '/v1/invoices/in_premium')) {
+                $response = [
+                    'id' => 'in_premium',
+                    'object' => 'invoice',
+                    'parent' => ['subscription_details' => ['subscription' => 'sub_premium']],
+                    'status' => 'paid',
+                    'currency' => 'jpy',
+                    'amount_paid' => 580,
+                    'payments' => ['data' => [[
+                        'status' => 'paid',
+                        'amount_paid' => 580,
+                        'payment' => ['payment_intent' => [
+                            'id' => 'pi_premium',
+                            'latest_charge' => ['id' => 'ch_premium', 'amount_refunded' => 0],
+                        ]],
+                    ]]],
+                ];
+            } elseif ($method === 'post' && str_contains($absUrl, '/v1/refunds')) {
+                $response = ['id' => 're_premium', 'object' => 'refund', 'amount' => $params['amount']];
+            } else {
+                throw new RuntimeException("Unexpected Stripe request: {$method} {$absUrl}");
+            }
+
+            return [json_encode($response, JSON_THROW_ON_ERROR), 200, ['Content-Type' => 'application/json']];
+        }
+    };
+    ApiRequestor::setHttpClient($httpClient);
+
+    try {
+        $user = User::factory()->create([
+            'plan' => User::PLAN_PREMIUM,
+            'stripe_customer_id' => 'cus_premium',
+            'stripe_subscription_id' => 'sub_premium',
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('billing.plan.change'), ['plan' => User::PLAN_LITE, 'timing' => 'immediate'])
+            ->assertRedirect(route('account.settings.edit'))
+            ->assertSessionHas('status', '対象となるお支払いがある場合は未使用期間分を返金し、ライトプランへ切り替えました。');
+
+        expect($httpClient->requests)->toHaveCount(4)
+            ->and($httpClient->requests[1]['params']['items'][0]['price'])->toBe('price_lite')
+            ->and($httpClient->requests[1]['params']['billing_cycle_anchor'])->toBe('now')
+            ->and($httpClient->requests[1]['params']['proration_behavior'])->toBe('none')
+            ->and($httpClient->requests[3]['params']['amount'])->toBe(
+                (int) round(580 * ($periodEnd - now()->timestamp) / ($periodEnd - $periodStart)),
+            );
+    } finally {
+        ApiRequestor::setHttpClient(new CurlClient);
+    }
+});
+
+test('members can schedule cancellation at the end of their current billing period', function () {
+    config([
+        'services.stripe.secret' => 'sk_test',
+        'services.stripe.prices.lite' => 'price_lite',
+    ]);
+    $httpClient = new class implements ClientInterface
+    {
+        public array $requests = [];
+
+        public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1', $maxNetworkRetries = null)
+        {
+            $this->requests[] = compact('method', 'absUrl', 'params');
+            $response = $method === 'get'
+                ? [
+                    'id' => 'sub_cancel_period_end',
+                    'object' => 'subscription',
+                    'customer' => 'cus_cancel_period_end',
+                    'status' => 'active',
+                    'current_period_end' => now()->addDays(10)->timestamp,
+                    'items' => ['data' => [[
+                        'id' => 'si_cancel_period_end',
+                        'price' => ['id' => 'price_lite'],
+                    ]]],
+                ]
+                : ['id' => 'sub_cancel_period_end', 'object' => 'subscription', 'cancel_at_period_end' => true];
+
+            return [json_encode($response, JSON_THROW_ON_ERROR), 200, ['Content-Type' => 'application/json']];
+        }
+    };
+    ApiRequestor::setHttpClient($httpClient);
+
+    try {
+        $user = User::factory()->create([
+            'plan' => User::PLAN_LITE,
+            'stripe_customer_id' => 'cus_cancel_period_end',
+            'stripe_subscription_id' => 'sub_cancel_period_end',
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('billing.subscription.cancel'), ['timing' => 'period_end'])
+            ->assertRedirect(route('account.settings.edit'))
+            ->assertSessionHas('status', '契約期間終了時の解約を予約しました。期間終了までは現在のプランをご利用いただけます。');
+
+        expect($httpClient->requests)->toHaveCount(2)
+            ->and($httpClient->requests[1]['params']['cancel_at_period_end'])->toBe('true')
+            ->and($user->fresh()->stripe_cancel_at_period_end)->toBeTrue();
+    } finally {
+        ApiRequestor::setHttpClient(new CurlClient);
+    }
+});
+
+test('members can cancel immediately and receive a prorated refund', function () {
+    config([
+        'services.stripe.secret' => 'sk_test',
+        'services.stripe.prices.lite' => 'price_lite',
+    ]);
+    $periodStart = now()->subDays(10)->timestamp;
+    $periodEnd = now()->addDays(20)->timestamp;
+    $httpClient = new class($periodStart, $periodEnd) implements ClientInterface
+    {
+        public array $requests = [];
+
+        public function __construct(private int $periodStart, private int $periodEnd) {}
+
+        public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1', $maxNetworkRetries = null)
+        {
+            $this->requests[] = compact('method', 'absUrl', 'params');
+            if ($method === 'get' && str_contains($absUrl, '/v1/subscriptions/sub_lite')) {
+                $response = [
+                    'id' => 'sub_lite',
+                    'object' => 'subscription',
+                    'customer' => 'cus_lite',
+                    'status' => 'active',
+                    'current_period_start' => $this->periodStart,
+                    'current_period_end' => $this->periodEnd,
+                    'latest_invoice' => [
+                        'id' => 'in_lite',
+                        'parent' => ['subscription_details' => ['subscription' => 'sub_lite']],
+                        'status' => 'paid',
+                        'currency' => 'jpy',
+                        'amount_paid' => 220,
+                        'payments' => ['data' => [[
+                            'status' => 'paid',
+                            'amount_paid' => 220,
+                            'payment' => ['payment_intent' => [
+                                'id' => 'pi_lite',
+                                'latest_charge' => ['id' => 'ch_lite', 'amount_refunded' => 0],
+                            ]],
+                        ]]],
+                    ],
+                    'items' => ['data' => [[
+                        'id' => 'si_lite',
+                        'price' => ['id' => 'price_lite'],
+                    ]]],
+                ];
+            } elseif ($method === 'delete' && str_contains($absUrl, '/v1/subscriptions/sub_lite')) {
+                $response = ['id' => 'sub_lite', 'object' => 'subscription', 'status' => 'canceled'];
+            } elseif ($method === 'post' && str_contains($absUrl, '/v1/refunds')) {
+                $response = ['id' => 're_lite', 'object' => 'refund', 'amount' => $params['amount']];
+            } else {
+                throw new RuntimeException("Unexpected Stripe request: {$method} {$absUrl}");
+            }
+
+            return [json_encode($response, JSON_THROW_ON_ERROR), 200, ['Content-Type' => 'application/json']];
+        }
+    };
+    ApiRequestor::setHttpClient($httpClient);
+
+    try {
+        $user = User::factory()->create([
+            'plan' => User::PLAN_LITE,
+            'stripe_customer_id' => 'cus_lite',
+            'stripe_subscription_id' => 'sub_lite',
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('billing.subscription.cancel'), ['timing' => 'immediate'])
+            ->assertRedirect(route('account.settings.edit'))
+            ->assertSessionHas('status', '対象となるお支払いがある場合は未使用期間分を返金し、プランを解約しました。');
+
+        expect($httpClient->requests)->toHaveCount(3)
+            ->and($httpClient->requests[1]['method'])->toBe('delete')
+            ->and($httpClient->requests[2]['params']['amount'])->toBe(
+                (int) round(220 * ($periodEnd - now()->timestamp) / ($periodEnd - $periodStart)),
+            );
+    } finally {
+        ApiRequestor::setHttpClient(new CurlClient);
+    }
+});
+
+test('members can cancel a scheduled subscription cancellation', function () {
+    config(['services.stripe.secret' => 'sk_test']);
+    $httpClient = new class implements ClientInterface
+    {
+        public array $requests = [];
+
+        public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1', $maxNetworkRetries = null)
+        {
+            $this->requests[] = compact('method', 'absUrl', 'params');
+
+            return [
+                json_encode([
+                    'id' => 'sub_cancel_scheduled',
+                    'object' => 'subscription',
+                    'cancel_at_period_end' => false,
+                ], JSON_THROW_ON_ERROR),
+                200,
+                ['Content-Type' => 'application/json'],
+            ];
+        }
+    };
+    ApiRequestor::setHttpClient($httpClient);
+
+    try {
+        $user = User::factory()->create([
+            'plan' => User::PLAN_LITE,
+            'stripe_customer_id' => 'cus_cancel_scheduled',
+            'stripe_subscription_id' => 'sub_cancel_scheduled',
+            'stripe_cancel_at_period_end' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->delete(route('billing.plan.cancel'))
+            ->assertRedirect(route('account.settings.edit'))
+            ->assertSessionHas('status', '解約予約を取り消しました。');
+
+        expect($httpClient->requests)->toHaveCount(1)
+            ->and($httpClient->requests[0]['params']['cancel_at_period_end'])->toBe('false')
+            ->and($user->fresh()->stripe_cancel_at_period_end)->toBeFalse();
+    } finally {
+        ApiRequestor::setHttpClient(new CurlClient);
+    }
+});
+
 test('members can cancel a scheduled downgrade', function () {
     config(['services.stripe.secret' => 'sk_test']);
     $httpClient = new class implements ClientInterface
@@ -589,12 +960,58 @@ test('members can cancel a scheduled downgrade', function () {
     }
 });
 
-test('subscription schedule webhooks clear the stored scheduled plan', function () {
+test('members can cancel a scheduled billing frequency change', function () {
+    config(['services.stripe.secret' => 'sk_test']);
+    $httpClient = new class implements ClientInterface
+    {
+        public array $requests = [];
+
+        public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1', $maxNetworkRetries = null)
+        {
+            $this->requests[] = compact('method', 'absUrl', 'params');
+
+            return [
+                json_encode([
+                    'id' => 'sched_frequency',
+                    'object' => 'subscription_schedule',
+                    'status' => 'released',
+                ], JSON_THROW_ON_ERROR),
+                200,
+                ['Content-Type' => 'application/json'],
+            ];
+        }
+    };
+    ApiRequestor::setHttpClient($httpClient);
+
+    try {
+        $user = User::factory()->create([
+            'plan' => User::PLAN_LITE,
+            'stripe_customer_id' => 'cus_frequency',
+            'stripe_subscription_id' => 'sub_frequency',
+            'stripe_scheduled_interval' => 'year',
+            'stripe_subscription_schedule_id' => 'sched_frequency',
+        ]);
+
+        $this->actingAs($user)
+            ->delete(route('billing.plan.cancel'))
+            ->assertRedirect(route('account.settings.edit'))
+            ->assertSessionHas('status', 'お支払い周期の変更予約を取り消しました。');
+
+        expect($httpClient->requests)->toHaveCount(1)
+            ->and($httpClient->requests[0]['absUrl'])->toContain('/v1/subscription_schedules/sched_frequency/release')
+            ->and($user->fresh()->stripe_scheduled_interval)->toBeNull()
+            ->and($user->fresh()->stripe_subscription_schedule_id)->toBeNull();
+    } finally {
+        ApiRequestor::setHttpClient(new CurlClient);
+    }
+});
+
+test('subscription schedule webhooks clear the stored scheduled interval', function () {
     config(['services.stripe.webhook_secret' => 'whsec_test']);
     $user = User::factory()->create([
         'stripe_customer_id' => 'cus_schedule_webhook',
         'stripe_subscription_id' => 'sub_schedule_webhook',
-        'stripe_scheduled_plan' => User::PLAN_LITE,
+        'stripe_scheduled_interval' => 'year',
         'stripe_subscription_schedule_id' => 'sched_webhook',
     ]);
     $payload = json_encode([
@@ -624,6 +1041,7 @@ test('subscription schedule webhooks clear the stored scheduled plan', function 
     )->assertOk();
 
     expect($user->fresh()->stripe_scheduled_plan)->toBeNull()
+        ->and($user->fresh()->stripe_scheduled_interval)->toBeNull()
         ->and($user->fresh()->stripe_subscription_schedule_id)->toBeNull();
 });
 
@@ -932,4 +1350,118 @@ test('subscription deletion returns a member to free and stale webhooks cannot r
     expect($user->fresh()->plan)->toBe(User::PLAN_FREE)
         ->and($user->fresh()->stripe_subscription_id)->toBeNull()
         ->and($user->fresh()->stripe_subscription_status)->toBeNull();
+});
+
+function accountDeletionStripeClient(int $periodStart, int $periodEnd, bool $failRefund = false): ClientInterface
+{
+    return new class($periodStart, $periodEnd, $failRefund) implements ClientInterface
+    {
+        public array $requests = [];
+
+        public function __construct(private int $periodStart, private int $periodEnd, private bool $failRefund) {}
+
+        public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1', $maxNetworkRetries = null)
+        {
+            $this->requests[] = compact('method', 'absUrl', 'params');
+            $status = 200;
+            if ($method === 'get' && str_contains($absUrl, '/v1/subscriptions/sub_del')) {
+                $response = [
+                    'id' => 'sub_del',
+                    'object' => 'subscription',
+                    'customer' => 'cus_del',
+                    'status' => 'active',
+                    'current_period_start' => $this->periodStart,
+                    'current_period_end' => $this->periodEnd,
+                    'latest_invoice' => [
+                        'id' => 'in_del',
+                        'parent' => ['subscription_details' => ['subscription' => 'sub_del']],
+                        'status' => 'paid',
+                        'currency' => 'jpy',
+                        'amount_paid' => 300,
+                        'payments' => ['data' => [[
+                            'status' => 'paid',
+                            'amount_paid' => 300,
+                            'payment' => ['payment_intent' => [
+                                'id' => 'pi_del',
+                                'latest_charge' => ['id' => 'ch_del', 'amount_refunded' => 0],
+                            ]],
+                        ]]],
+                    ],
+                    'items' => ['data' => [['id' => 'si_del', 'price' => ['id' => 'price_lite']]]],
+                ];
+            } elseif ($method === 'post' && str_contains($absUrl, '/v1/refunds')) {
+                if ($this->failRefund) {
+                    $status = 500;
+                    $response = ['error' => ['type' => 'api_error', 'message' => 'refund failed']];
+                } else {
+                    $response = ['id' => 're_del', 'object' => 'refund', 'amount' => $params['amount']];
+                }
+            } elseif ($method === 'delete' && str_contains($absUrl, '/v1/subscriptions/sub_del')) {
+                $response = ['id' => 'sub_del', 'object' => 'subscription', 'status' => 'canceled'];
+            } elseif ($method === 'delete' && str_contains($absUrl, '/v1/customers/cus_del')) {
+                $response = ['id' => 'cus_del', 'object' => 'customer', 'deleted' => true];
+            } else {
+                throw new RuntimeException("Unexpected Stripe request: {$method} {$absUrl}");
+            }
+
+            return [json_encode($response, JSON_THROW_ON_ERROR), $status, ['Content-Type' => 'application/json']];
+        }
+    };
+}
+
+test('account deletion refunds the unused period before cancelling the subscription', function () {
+    config(['services.stripe.secret' => 'sk_test', 'services.stripe.prices.lite' => 'price_lite']);
+    $periodStart = now()->subDays(10)->timestamp;
+    $periodEnd = now()->addDays(20)->timestamp;
+    $httpClient = accountDeletionStripeClient($periodStart, $periodEnd);
+    ApiRequestor::setHttpClient($httpClient);
+
+    try {
+        $user = User::factory()->create([
+            'plan' => User::PLAN_LITE,
+            'stripe_customer_id' => 'cus_del',
+            'stripe_subscription_id' => 'sub_del',
+        ]);
+
+        $this->actingAs($user)
+            ->delete(route('account.settings.destroy'), ['password' => 'password'])
+            ->assertRedirect(route('login'));
+
+        $methods = array_map(fn (array $request): string => $request['method'].' '.parse_url($request['absUrl'], PHP_URL_PATH), $httpClient->requests);
+        expect($methods)->toBe([
+            'get /v1/subscriptions/sub_del',
+            'post /v1/refunds',
+            'delete /v1/subscriptions/sub_del',
+            'delete /v1/customers/cus_del',
+        ])->and($httpClient->requests[1]['params']['payment_intent'])->toBe('pi_del')
+            ->and($httpClient->requests[1]['params']['amount'])->toBe(
+                (int) round(300 * ($periodEnd - now()->timestamp) / ($periodEnd - $periodStart)),
+            );
+        $this->assertDatabaseMissing('users', ['id' => $user->id]);
+    } finally {
+        ApiRequestor::setHttpClient(new CurlClient);
+    }
+});
+
+test('account deletion is aborted without cancelling when the refund fails', function () {
+    config(['services.stripe.secret' => 'sk_test', 'services.stripe.prices.lite' => 'price_lite']);
+    $httpClient = accountDeletionStripeClient(now()->subDays(10)->timestamp, now()->addDays(20)->timestamp, failRefund: true);
+    ApiRequestor::setHttpClient($httpClient);
+
+    try {
+        $user = User::factory()->create([
+            'plan' => User::PLAN_LITE,
+            'stripe_customer_id' => 'cus_del',
+            'stripe_subscription_id' => 'sub_del',
+        ]);
+
+        $this->actingAs($user)
+            ->delete(route('account.settings.destroy'), ['password' => 'password'])
+            ->assertSessionHasErrors('account');
+
+        $this->assertDatabaseHas('users', ['id' => $user->id]);
+        expect(collect($httpClient->requests)->pluck('method')->all())->not->toContain('delete');
+    } finally {
+        ApiRequestor::setHttpClient(new CurlClient);
+    }
 });
