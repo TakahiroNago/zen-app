@@ -455,6 +455,26 @@ h2 {
         linear-gradient(145deg, #17382c, #244536 58%, #19372d);
 }
 
+.consultation-image-stage {
+    min-height: clamp(300px, 78vw, 360px);
+    max-height: 360px;
+    padding: 24px;
+}
+
+.consultation-detail > .consultation-image-stage {
+    margin: -42px -42px 28px;
+    border-radius: 5px 5px 0 0;
+}
+
+.consultation-image {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: min(70%, 320px);
+    max-height: 320px;
+    object-fit: contain;
+}
+
 .form-panel {
     max-width: 720px;
     margin-inline: auto;
@@ -1758,6 +1778,10 @@ h2 {
     .history-panel,
     .consultation-detail {
         padding: 28px 20px;
+    }
+
+    .consultation-detail > .consultation-image-stage {
+        margin: -28px -20px 28px;
     }
 
     .history-heading {

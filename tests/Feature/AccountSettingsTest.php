@@ -429,7 +429,7 @@ test('account settings offer immediate upgrades and end-of-period downgrades', f
         ->assertSee('すぐに切り替えて未使用期間分を返金')
         ->assertSee('data-confirmation-period-end-label="現在のプレミアム期間終了日時:"', false)
         ->assertSee('data-confirmation-period-end-date="'.$periodEnd->format('Y年n月j日 H:i').'"', false)
-        ->assertSee('すぐに解約して未使用期間分を返金')
+        ->assertSee('契約期間終了時に解約します。期間終了までは現在のプランをご利用いただけます。')
         ->assertSee('自動更新をオフにする');
 });
 

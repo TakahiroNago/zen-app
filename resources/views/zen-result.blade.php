@@ -12,6 +12,11 @@
 
         <main class="page-content">
             <section class="result-panel result-panel-consultation">
+                @if ($imageUrl = App\Models\ZenConsultation::imageUrl($image_number ?? null))
+                    <div class="art-stage consultation-image-stage">
+                        <img class="consultation-image" src="{{ $imageUrl }}" alt="">
+                    </div>
+                @endif
                 <div class="result-copy">
                     <p class="eyebrow result-eyebrow">WORDS FOR YOU</p>
                     <h1 class="result-heading result-title">{{ __('禅師からのことば') }}</h1>

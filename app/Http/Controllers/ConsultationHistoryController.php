@@ -117,6 +117,7 @@ class ConsultationHistoryController extends Controller
             $consultationData = [
                 'concern' => $sessionConsultation['concern'],
                 'response' => $sessionConsultation['response'],
+                'image_number' => $sessionConsultation['image_number'] ?? null,
             ];
         } else {
             $user = $request->user();
@@ -149,7 +150,7 @@ class ConsultationHistoryController extends Controller
                 abort_if($newerConsultations >= 50, 404);
             }
 
-            $consultationData = $savedConsultation->only(['concern', 'response', 'created_at']);
+            $consultationData = $savedConsultation->only(['concern', 'response', 'image_number', 'created_at']);
         }
 
         $shareToken = $shareService->create(

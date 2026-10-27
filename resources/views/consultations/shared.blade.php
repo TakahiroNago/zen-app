@@ -19,6 +19,11 @@
         </header>
         <main class="page-content history-content">
             <article class="consultation-detail consultation-detail">
+                @if ($imageUrl = App\Models\ZenConsultation::imageUrl($consultation['image_number'] ?? null))
+                    <div class="art-stage consultation-image-stage">
+                        <img class="consultation-image" src="{{ $imageUrl }}" alt="">
+                    </div>
+                @endif
                 <div class="consultation-detail-copy">
                     <p class="eyebrow consultation-detail-eyebrow">WORDS FOR YOU</p>
                     <h1 class="consultation-detail-title">{{ __('禅師からのことば') }}</h1>

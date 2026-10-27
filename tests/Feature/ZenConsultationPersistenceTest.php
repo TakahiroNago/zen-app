@@ -97,7 +97,7 @@ test('authenticated consultations are stored with their topic and summary', func
     });
 
     expect(Schema::getColumnListing('zen_consultations'))
-        ->toEqualCanonicalizing(['id', 'user_id', 'concern', 'response', 'topic', 'summary', 'daily_consultation_date', 'share_token_hash', 'contains_personal_info', 'created_at', 'updated_at']);
+        ->toEqualCanonicalizing(['id', 'user_id', 'concern', 'response', 'topic', 'summary', 'daily_consultation_date', 'share_token_hash', 'contains_personal_info', 'image_number', 'created_at', 'updated_at']);
 });
 
 test('English consultations use English prompts and store an English summary', function () {
@@ -115,7 +115,7 @@ test('English consultations use English prompts and store an English summary', f
         ->post(route('zen.respond', ['locale' => 'en']), ['concern' => 'How can I grow in my career?'])
         ->assertOk()
         ->assertSee('Words from your Zen guide')
-        ->assertSee('Your concern')
+        ->assertSee('Your thoughts')
         ->assertSee('Response')
         ->assertSee('Take one thoughtful step at a time.');
 
@@ -253,7 +253,7 @@ test('guest consultations stay in the same session and are not written to the da
 
     $firstResponse = $this->post(route('zen.respond'), ['concern' => 'First question?'])
         ->assertOk()
-        ->assertSee('Share Link')
+        ->assertSee('リンクでシェア')
         ->assertDontSee('Xでシェア')
         ->assertDontSee('LINEでシェア')
         ->assertDontSee('Facebookでシェア')
@@ -367,6 +367,20 @@ test('users can view only their own database and session consultations', functio
     $this->get(route('consultations.show', 'session-0'))
         ->assertOk()
         ->assertSee('A session answer.');
+});
+
+test('saved consultations show their stored image in the history detail', function () {
+    $user = User::factory()->create();
+    $reading = $user->zenConsultations()->create([
+        'concern' => 'Image question?',
+        'response' => 'Image answer.',
+        'image_number' => 7,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('consultations.show', $reading->id))
+        ->assertOk()
+        ->assertSee('images/07.png', false);
 });
 
 test('guests can view session readings but cannot open database reading ids', function () {

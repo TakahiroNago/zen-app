@@ -50,6 +50,9 @@ class SessionConsultationPersister
                 'concern' => $consultation['concern'],
                 'response' => $consultation['response'],
             ];
+            if (is_int($consultation['image_number'] ?? null)) {
+                $persistedConsultation['image_number'] = $consultation['image_number'];
+            }
             if ($hasTopic) {
                 $persistedConsultation['topic'] = $consultation['topic'];
                 $persistedConsultation['summary'] = $consultation['summary'];

@@ -205,6 +205,7 @@ class ZenController extends Controller
             $consultation = [
                 'concern' => $concern,
                 'response' => $answer,
+                'image_number' => random_int(1, ZenConsultation::IMAGE_COUNT),
                 ...$metadata,
             ];
             $shareToken = $shareService->create($consultation, $containsPersonalInfo);

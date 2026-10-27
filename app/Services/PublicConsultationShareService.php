@@ -20,6 +20,7 @@ class PublicConsultationShareService
             'concern' => $hideConcern ? null : $consultation['concern'],
             'response' => $consultation['response'],
             'concern_hidden' => $hideConcern,
+            'image_number' => $consultation['image_number'] ?? null,
         ], now()->addDays(self::EXPIRATION_DAYS));
 
         return $token;
@@ -47,6 +48,7 @@ class PublicConsultationShareService
             'concern' => is_string($cachedConsultation['concern'] ?? null) ? $cachedConsultation['concern'] : null,
             'response' => $cachedConsultation['response'],
             'concern_hidden' => ($cachedConsultation['concern_hidden'] ?? false) === true,
+            'image_number' => is_int($cachedConsultation['image_number'] ?? null) ? $cachedConsultation['image_number'] : null,
         ];
     }
 
