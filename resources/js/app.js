@@ -326,6 +326,23 @@ if (accountSettingsNotice) {
 if (questionForm) {
 	const submitButton = questionForm.querySelector('button[type="submit"]');
 	const submitLabel = questionForm.querySelector('.submit-label');
+	const questionInput = questionForm.querySelector('[data-submit-on-enter]');
+
+	questionInput?.addEventListener('keydown', (event) => {
+		if (
+			event.key !== 'Enter'
+			|| event.shiftKey
+			|| event.isComposing
+			|| event.keyCode === 229
+		) {
+			return;
+		}
+
+		event.preventDefault();
+		if (!submitButton.disabled) {
+			questionForm.requestSubmit(submitButton);
+		}
+	});
 
 	questionForm.addEventListener('submit', () => {
 		questionForm.classList.add('is-submitting');

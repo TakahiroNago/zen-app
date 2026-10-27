@@ -60,6 +60,7 @@
                         rows="1"
                         maxlength="200"
                         data-auto-grow
+                        data-submit-on-enter
                         required
                     >{{ old('concern') }}</textarea>
                     <p class="page-description question-privacy-note">{{ __('氏名・住所・勤務先・電話番号・メールアドレスなどの個人情報は、ご自身や他の方のものも含めて書かないでください。') }}</p>

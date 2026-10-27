@@ -249,7 +249,7 @@ class ZenController extends Controller
             'messages' => [
                 [
                     'role' => 'system',
-                    'content' => $this->zenPrompt('topic.ja'),
+                    'content' => $this->consultationTopicPrompt($this->zenPrompt('topic.ja')),
                 ],
                 [
                     'role' => 'user',
@@ -358,7 +358,9 @@ class ZenController extends Controller
             'messages' => [
                 [
                     'role' => 'system',
-                    'content' => $this->zenPrompt('metadata.'.(app()->isLocale('ja') ? 'ja' : 'en')),
+                    'content' => $this->consultationTopicPrompt(
+                        $this->zenPrompt('metadata.'.(app()->isLocale('ja') ? 'ja' : 'en')),
+                    ),
                 ],
                 [
                     'role' => 'user',
@@ -394,6 +396,23 @@ class ZenController extends Controller
             'topic' => $topic,
             'summary' => $summary,
         ];
+    }
+
+    private function consultationTopicPrompt(string $prompt): string
+    {
+        $updatedPrompt = preg_replace(
+            '/(?:「[^」]+」){2,}/u',
+            '「'.implode('」「', ZenConsultation::TOPICS).'」',
+            $prompt,
+            1,
+            $replacementCount,
+        );
+
+        if (! is_string($updatedPrompt) || $replacementCount !== 1) {
+            throw new UnexpectedValueException('Zen consultation topic list is missing from its prompt.');
+        }
+
+        return $updatedPrompt;
     }
 
     private function guestDeviceToken(Request $request): string

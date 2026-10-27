@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['user_id', 'concern', 'response', 'topic', 'summary', 'daily_consultation_date', 'share_token_hash', 'contains_personal_info', 'image_number'])]
 class ZenConsultation extends Model
 {
-    public const TOPICS = ['仕事', '恋愛', 'お金', '家族', '人間関係', '健康', '将来', '自分自身', 'その他'];
+    public const TOPICS = ['仕事', '恋愛', 'お金', '家族', '人間関係', '健康', '将来', '自分自身', '芸術', 'その他'];
 
     public const SUMMARY_MAX_LENGTH = 150;
 

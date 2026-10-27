@@ -192,7 +192,7 @@ test('premium consultations use the three latest summaries from the concern topi
 
     $openAiFake->assertSent(Chat::class, function (string $method, array $parameters): bool {
         return $method === 'create'
-            && $parameters['messages'][0]['content'] === '相談内容を「仕事」「恋愛」「お金」「家族」「人間関係」「健康」「将来」「自分自身」「その他」のいずれか1つに分類してください。分類結果のテーマ名だけを返してください。'
+            && $parameters['messages'][0]['content'] === '相談内容を「仕事」「恋愛」「お金」「家族」「人間関係」「健康」「将来」「自分自身」「芸術」「その他」のいずれか1つに分類してください。分類結果のテーマ名だけを返してください。'
             && $parameters['messages'][1]['content'] === 'How can I grow in my career?';
     });
     $openAiFake->assertSent(Chat::class, function (string $method, array $parameters): bool {
@@ -296,6 +296,35 @@ test('guest consultations stay in the same session and are not written to the da
         ->and($consultations[1]['concern'])->toBe('Second question?');
 
     $this->assertDatabaseCount('zen_consultations', 0);
+});
+
+test('art is an available consultation topic for metadata and history filtering', function () {
+    OpenAI::fake([
+        CreateResponse::fake([
+            'choices' => [['message' => ['content' => 'A thoughtful reflection on creativity.']]],
+        ]),
+        CreateResponse::fake([
+            'choices' => [['message' => ['content' => '{"topic":"芸術","summary":"創作を通じて自分の思いを表現する助言です。"}']]],
+        ]),
+    ]);
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('zen.respond'), ['concern' => 'How can I express myself through art?'])
+        ->assertOk()
+        ->assertViewHas('topic', '芸術');
+    OpenAI::assertSent(Chat::class, function (string $method, array $parameters): bool {
+        return $method === 'create'
+            && str_contains($parameters['messages'][0]['content'], '「自分自身」「芸術」「その他」');
+    });
+
+    $response = $this->get(route('consultations.index', ['topic' => '芸術']))
+        ->assertOk()
+        ->assertSee('How can I express myself through art?')
+        ->assertSee('value="芸術" selected', false);
+
+    expect($user->zenConsultations()->sole()->topic)->toBe('芸術')
+        ->and($response->viewData('topics')->all())->toBe(['芸術']);
 });
 
 test('consultation metadata outside the allowed topic and summary limits is rejected', function () {
