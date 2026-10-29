@@ -1,4 +1,4 @@
-<footer class="site-footer">
+<footer class="site-footer" data-reveal="footer">
     <div class="site-footer-branding">
         <span>YOUR MOMENT, YOUR MEANING</span>
         <small class="site-footer-copyright">© 2026 Art Full Stack. All rights reserved.</small>

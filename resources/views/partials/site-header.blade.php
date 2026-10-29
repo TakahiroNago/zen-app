@@ -1,4 +1,4 @@
-<header class="site-header">
+<header class="site-header" data-reveal="header">
     <a class="brand" href="{{ route('home') }}">
         <span class="brand-mark" aria-hidden="true">✦</span>
         <span class="brand-name">{{ __('心の庵') }}</span>
