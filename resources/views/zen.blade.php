@@ -49,7 +49,7 @@
                     @endif
                 @endauth
 
-                <form class="question-form" method="POST" action="{{ route('zen.respond') }}" data-loading-label="{{ __('読み解いています...') }}">
+                <form class="question-form" method="POST" action="{{ route('zen.respond') }}">
                     @csrf
                     <label class="question-label" for="concern">{{ __('あなたの思い') }}</label>
                     <textarea
@@ -80,7 +80,7 @@
                     </button>
                 </form>
                 @if (session('anonymized_concern'))
-                    <form class="question-form" method="POST" action="{{ route('zen.respond') }}" data-loading-label="{{ __('読み解いています...') }}">
+                    <form class="question-form" method="POST" action="{{ route('zen.respond') }}">
                         @csrf
                         <p class="form-notice">{{ __('個人情報と思われる部分を伏せた内容で相談できます。内容をご確認ください。') }}</p>
                         <p class="question-quote">{{ session('anonymized_concern') }}</p>

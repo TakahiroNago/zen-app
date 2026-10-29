@@ -372,6 +372,11 @@ if (questionForm) {
 		questionForm.classList.add('is-submitting');
 		questionForm.setAttribute('aria-busy', 'true');
 		submitButton.disabled = true;
-		submitLabel.textContent = questionForm.dataset.loadingLabel;
+		let dotCount = 1;
+		submitLabel.textContent = '.';
+		window.setInterval(() => {
+			dotCount = (dotCount % 3) + 1;
+			submitLabel.textContent = '.'.repeat(dotCount);
+		}, 400);
 	});
 }
