@@ -165,6 +165,8 @@ a {
 }
 
 .site-header {
+    position: relative;
+    z-index: 20;
     display: flex;
     min-height: 94px;
     align-items: center;
