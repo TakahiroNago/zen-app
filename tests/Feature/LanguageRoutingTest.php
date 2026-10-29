@@ -67,6 +67,10 @@ test('authentication emails link back to the users preferred locale', function (
 
 test('localized pages set the app locale and persist it for signed in users', function () {
     $user = User::factory()->create(['preferred_locale' => 'ja']);
+    config([
+        'services.stripe.secret' => 'sk_test',
+        'services.stripe.prices.premium' => 'price_premium',
+    ]);
 
     $this->actingAs($user)
         ->get('/en/plans')
