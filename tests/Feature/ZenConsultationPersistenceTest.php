@@ -409,7 +409,8 @@ test('saved consultations show their stored image in the history detail', functi
     $this->actingAs($user)
         ->get(route('consultations.show', $reading->id))
         ->assertOk()
-        ->assertSee('images/07.png', false);
+        ->assertSee('images/07.webp', false)
+        ->assertSee('width="640" height="640"', false);
 });
 
 test('guests can view session readings but cannot open database reading ids', function () {

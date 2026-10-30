@@ -15,13 +15,15 @@ class ZenConsultation extends Model
 
     public const IMAGE_COUNT = 16;
 
+    public const IMAGE_SIZE = 640;
+
     public static function imageUrl(mixed $imageNumber): string
     {
         if (! is_int($imageNumber) || $imageNumber < 1 || $imageNumber > self::IMAGE_COUNT) {
             $imageNumber = 1;
         }
 
-        return asset(sprintf('images/%02d.png', $imageNumber));
+        return asset(sprintf('images/%02d.webp', $imageNumber));
     }
 
     protected function casts(): array

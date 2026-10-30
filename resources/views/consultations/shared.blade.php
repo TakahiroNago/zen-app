@@ -22,7 +22,7 @@
     <article class="consultation-detail consultation-detail">
         @if ($imageUrl = App\Models\ZenConsultation::imageUrl($consultation['image_number'] ?? null))
             <div class="art-stage consultation-image-stage">
-                <img class="consultation-image" src="{{ $imageUrl }}" alt="">
+                <img class="consultation-image" src="{{ $imageUrl }}" alt="" width="{{ App\Models\ZenConsultation::IMAGE_SIZE }}" height="{{ App\Models\ZenConsultation::IMAGE_SIZE }}" decoding="async" fetchpriority="high">
             </div>
         @endif
         <div class="consultation-detail-copy">
