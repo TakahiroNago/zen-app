@@ -42,9 +42,9 @@
                 <section class="account-popover" id="account-popover" aria-label="{{ __('アカウントメニュー') }}">
                     <div class="account-profile">
                         <svg class="account-avatar" aria-hidden="true" viewBox="0 0 48 48">
-                            <circle cx="24" cy="24" r="23" fill="#78496f"/>
-                            <circle cx="24" cy="18" r="8" fill="#fdfafe"/>
-                            <path d="M9 41c1.8-8 7.4-12 15-12s13.2 4 15 12" fill="#fdfafe"/>
+                            <circle class="account-avatar-background" cx="24" cy="24" r="23"/>
+                            <circle class="account-avatar-figure" cx="24" cy="18" r="8"/>
+                            <path class="account-avatar-figure" d="M9 41c1.8-8 7.4-12 15-12s13.2 4 15 12"/>
                         </svg>
                         <div class="account-profile-details">
                             <span class="account-profile-name">{{ auth()->user()->name }}</span>

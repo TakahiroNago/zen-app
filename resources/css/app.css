@@ -299,6 +299,14 @@ a {
     height: 40px;
 }
 
+.account-avatar-background {
+    fill: var(--color-forest);
+}
+
+.account-avatar-figure {
+    fill: var(--color-panel);
+}
+
 .account-menu-trigger .account-menu-icon {
     width: 22px;
     height: 22px;
