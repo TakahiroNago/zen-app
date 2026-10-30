@@ -73,7 +73,7 @@
                             {{ __('個人情報が含まれていることを理解したうえで、このまま送信する（共有URLでは相談文が非表示になります）') }}
                         </label>
                     @endif
-                    <button class="primary-action" type="submit" data-submitting-label="{{ __('読み解いています...') }}" @disabled(auth()->check() ? (! $creditSummary['unlimited'] && $creditSummary['total'] === 0) : $guestCredits === 0)>
+                    <button class="primary-action" type="submit" @disabled(auth()->check() ? (! $creditSummary['unlimited'] && $creditSummary['total'] === 0) : $guestCredits === 0) data-submitting-label="{{ __('読み解いています...') }}">
                         <span class="loading-spinner" aria-hidden="true"></span>
                         <span class="submit-label">{{ __('相談する') }}</span>
                         <span class="action-arrow" aria-hidden="true">→</span>
