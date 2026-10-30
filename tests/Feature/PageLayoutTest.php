@@ -13,6 +13,7 @@ test('public pages share a description, favicon, and open graph metadata', funct
         ->assertSee('<link rel="icon" href="'.asset('favicon.ico').'">', false)
         ->assertSee('<meta property="og:title" content="心の庵 ZEN REFLECTIONS">', false)
         ->assertSee('<meta property="og:image" content="'.asset('images/logo.png').'">', false)
+        ->assertSee('src="'.asset('images/logo.webp').'"', false)
         ->assertSee('<meta property="og:locale" content="ja_JP">', false)
         ->assertDontSee('name="robots"', false);
 

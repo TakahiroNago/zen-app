@@ -525,6 +525,7 @@ h2 {
     z-index: 1;
     display: block;
     width: min(70%, 360px);
+    height: auto;
     max-height: 360px;
     object-fit: contain;
 }
@@ -556,6 +557,7 @@ h2 {
     z-index: 1;
     display: block;
     width: min(70%, 320px);
+    height: auto;
     max-height: 320px;
     object-fit: contain;
 }

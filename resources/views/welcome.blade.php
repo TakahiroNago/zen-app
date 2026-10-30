@@ -19,7 +19,7 @@
             </a>
         </div>
         <div class="art-stage" data-reveal="art">
-            <img class="welcome-logo" src="{{ asset('images/logo.png') }}" alt="{{ __('心の庵') }} ZEN REFLECTIONS">
+            <img class="welcome-logo" src="{{ asset('images/logo.webp') }}" alt="{{ __('心の庵') }} ZEN REFLECTIONS" width="720" height="684" decoding="async" fetchpriority="high">
         </div>
     </section>
 @endsection
