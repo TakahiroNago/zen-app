@@ -8,15 +8,6 @@
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
 
-.welcome-logo {
-    position: relative;
-    z-index: 1;
-    display: block;
-    width: min(70%, 360px);
-    max-height: 360px;
-    object-fit: contain;
-}
-
 :root {
     color-scheme: light;
     --color-ink: #202923;
@@ -29,6 +20,11 @@
     --color-coral: #c86e57;
     --color-gold: #c69b53;
     --color-gold-light: #e7c98e;
+    --color-gold-dark: #8a682f;
+    --color-gold-darker: #735522;
+    --color-error: #a74439;
+    --color-danger: #963f32;
+    --color-danger-border: #b95e4e;
     --font-display: 'Palatino Linotype', 'Yu Mincho', 'Hiragino Mincho ProN', serif;
     --font-display-ja: 'Palatino Linotype', 'Yu Mincho', 'Hiragino Mincho ProN', 'Noto Serif JP', 'BIZ UDPMincho', serif;
     --font-sans-ja: 'Instrument Sans', 'Noto Sans JP', 'Yu Gothic UI', 'Hiragino Kaku Gothic ProN', Meiryo,
@@ -253,11 +249,13 @@ a {
 .account-register {
     min-height: 42px;
     padding: 0 14px;
-    border: 1px solid var(--color-forest) !important;
     border-radius: var(--radius-control);
-    background: rgb(49 92 73 / 5%) !important;
-    font-weight: 600;
-    text-decoration: none !important;
+}
+
+.account-navigation .account-register {
+    border: 1px solid var(--color-forest);
+    background: rgb(49 92 73 / 5%);
+    text-decoration: none;
 }
 
 .account-navigation .credit-balance-link {
@@ -319,15 +317,6 @@ a {
     background: var(--color-panel);
     box-shadow: 0 16px 40px rgb(35 56 42 / 16%);
     color: var(--color-ink);
-}
-
-.account-popover::before {
-    position: absolute;
-    right: 0;
-    bottom: 100%;
-    left: 0;
-    height: 9px;
-    content: '';
 }
 
 .account-menu.is-open .account-popover {
@@ -415,7 +404,7 @@ a {
     border: 1px solid rgb(49 92 73 / 13%);
     border-radius: 8px;
     background: rgb(251 252 247 / 83%);
-    box-shadow: 0 24px 70px rgb(35 56 42 / 8%);
+    box-shadow: var(--shadow-panel);
 }
 
 .welcome-panel {
@@ -523,6 +512,15 @@ h2 {
     font-size: 20px;
 }
 
+.welcome-logo {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: min(70%, 360px);
+    max-height: 360px;
+    object-fit: contain;
+}
+
 .art-stage {
     position: relative;
     display: grid;
@@ -530,8 +528,6 @@ h2 {
     place-items: center;
     overflow: hidden;
     background:
-        /* radial-gradient(ellipse at 50% 48%, rgb(198 155 83 / 22%), transparent 36%),
-        radial-gradient(ellipse at 50% 50%, rgb(75 113 88 / 75%), transparent 70%), */
         radial-gradient(ellipse at center, rgb(201 219 198 / 86%), transparent 67%),
         linear-gradient(145deg, #17382c, #244536 58%, #19372d);
 }
@@ -562,8 +558,7 @@ h2 {
     padding: 58px 68px 64px;
 }
 
-.form-panel h1,
-.result-heading {
+.form-panel h1 {
     margin-bottom: 12px;
     font-size: 38px;
     line-height: 1.4;
@@ -624,7 +619,7 @@ h2 {
 
 .form-error {
     margin: 0;
-    color: #a74439;
+    color: var(--color-error);
     font-size: 13px;
 }
 
@@ -669,9 +664,9 @@ h2 {
 }
 
 .toast.is-error {
-    border-left-color: #a74439;
+    border-left-color: var(--color-error);
     background: #fbf0ee;
-    color: #a74439;
+    color: var(--color-error);
 }
 
 .toast.is-dismissing {
@@ -901,6 +896,7 @@ h2 {
 .result-heading {
     margin-bottom: 30px;
     font-size: clamp(18px, 3.6vw, 34px);
+    line-height: 1.4;
     white-space: nowrap;
 }
 
@@ -1134,7 +1130,7 @@ h2 {
 .consultation-row {
     display: grid;
     min-height: 68px;
-       grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 18px;
     padding: 12px 8px;
@@ -1146,16 +1142,13 @@ h2 {
     color: var(--color-coral);
 }
 
-.consultation-row-session .consultation-question {
-    text-decoration: none;
-}
-
-.consultation-row-session .consultation-open {
-    text-decoration: none;
-}
-
 .consultation-row-session {
     grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.consultation-row-session .consultation-question,
+.consultation-row-session .consultation-open {
+    text-decoration: none;
 }
 
 .consultation-question {
@@ -1276,11 +1269,11 @@ h2 {
 
 .plan-card:first-child .plan-billing-options legend,
 .plan-card:first-child .plan-billing-option {
-    color: #8a682f;
+    color: var(--color-gold-dark);
 }
 
 .plan-card:first-child .plan-billing-option input {
-    accent-color: #8a682f;
+    accent-color: var(--color-gold-dark);
 }
 
 .plan-card h2 {
@@ -1289,7 +1282,7 @@ h2 {
 }
 
 .plan-card:first-child h2 {
-    color: #8a682f;
+    color: var(--color-gold-dark);
     font-weight: 800;
 }
 
@@ -1300,7 +1293,7 @@ h2 {
 }
 
 .plan-card:first-child > p:nth-of-type(-n + 4) {
-    color: #8a682f;
+    color: var(--color-gold-dark);
 }
 
 .plan-card .plan-price {
@@ -1308,17 +1301,17 @@ h2 {
 }
 
 .plan-card:first-child .plan-price strong {
-    color: #8a682f;
+    color: var(--color-gold-dark);
 }
 
 .plan-card:first-child .primary-action {
-    border-color: #8a682f;
-    background: #8a682f;
+    border-color: var(--color-gold-dark);
+    background: var(--color-gold-dark);
 }
 
 .plan-card:first-child .primary-action:hover {
-    border-color: #735522;
-    background: #735522;
+    border-color: var(--color-gold-darker);
+    background: var(--color-gold-darker);
 }
 
 .plan-credit-option {
@@ -1483,12 +1476,6 @@ h2 {
     margin: 0;
 }
 
-@media (max-width: 760px) {
-    .plan-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
 .admin-content {
     align-items: flex-start;
 }
@@ -1533,7 +1520,7 @@ h2 {
 
 .account-deletion-section h2,
 .account-deletion-section > p {
-    color: #963f32;
+    color: var(--color-danger);
 }
 
 .account-settings-section .question-form {
@@ -1594,8 +1581,8 @@ h2 {
 }
 
 .danger-action {
-    border-color: #b95e4e;
-    color: #963f32;
+    border-color: var(--color-danger-border);
+    color: var(--color-danger);
 }
 
 .confirm-dialog {
@@ -1623,7 +1610,7 @@ h2 {
 }
 
 .confirm-dialog .danger-title {
-    color: #963f32;
+    color: var(--color-danger);
 }
 
 .confirm-dialog .question-label,
@@ -1699,12 +1686,12 @@ h2 {
 
 .status-label.is-active {
     background: #e1eee4;
-    color: #315c49;
+    color: var(--color-forest);
 }
 
 .status-label.is-inactive {
     background: #f3e4df;
-    color: #963f32;
+    color: var(--color-danger);
 }
 
 .dashboard-section {
@@ -1828,6 +1815,10 @@ h2 {
 }
 
 @media (max-width: 760px) {
+    .plan-grid {
+        grid-template-columns: 1fr;
+    }
+
     .site-header,
     .site-footer,
     .page-content {
@@ -1985,26 +1976,6 @@ h2 {
     }
 }
 
-@media (max-width: 400px) {
-    .site-header,
-    .site-footer,
-    .page-content {
-        width: calc(100% - 28px);
-    }
-
-    .welcome-copy {
-        padding-inline: 22px;
-    }
-
-    .welcome-title {
-        font-size: clamp(26px, 8vw, 32px);
-    }
-
-    .form-panel {
-        padding-inline: 22px;
-    }
-}
-
 @media (max-width: 520px) {
     .site-header {
         align-items: center;
@@ -2054,6 +2025,26 @@ h2 {
         gap: 10px 16px;
         font-size: 12px;
         line-height: 1.7;
+    }
+}
+
+@media (max-width: 400px) {
+    .site-header,
+    .site-footer,
+    .page-content {
+        width: calc(100% - 28px);
+    }
+
+    .welcome-copy {
+        padding-inline: 22px;
+    }
+
+    .welcome-title {
+        font-size: clamp(26px, 8vw, 32px);
+    }
+
+    .form-panel {
+        padding-inline: 22px;
     }
 }
 
