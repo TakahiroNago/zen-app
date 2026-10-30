@@ -26,18 +26,20 @@
             @endif
         @endauth
         @auth
-            <div class="account-menu{{ request()->routeIs('plans') && request()->query('account_menu') === 'open' ? ' is-open' : '' }}">
+            @php($isAccountMenuOpen = request()->routeIs('plans') && request()->query('account_menu') === 'open')
+            <div class="account-menu{{ $isAccountMenuOpen ? ' is-open' : '' }}">
                 <button
                     type="button"
                     class="account-menu-trigger"
                     aria-label="{{ __('アカウントメニューを開く') }}"
-                    aria-haspopup="true"
+                    aria-controls="account-popover"
+                    aria-expanded="{{ $isAccountMenuOpen ? 'true' : 'false' }}"
                 >
                     <svg class="account-menu-icon" aria-hidden="true" viewBox="0 0 16 16">
                         <path fill="currentColor" d="M3 9.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
                     </svg>
                 </button>
-                <section class="account-popover" aria-label="{{ __('アカウントメニュー') }}">
+                <section class="account-popover" id="account-popover" aria-label="{{ __('アカウントメニュー') }}">
                     <div class="account-profile">
                         <svg class="account-avatar" aria-hidden="true" viewBox="0 0 48 48">
                             <circle cx="24" cy="24" r="23" fill="#78496f"/>
