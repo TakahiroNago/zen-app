@@ -1,49 +1,39 @@
-<!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ __('ユーザー編集') }} | {{ __('心の庵') }} ZEN REFLECTIONS</title>
-    @vite(['resources/css/app.css'])
-</head>
-<body>
-    <div class="page-frame">
-        @include('partials.site-header')
-        <main class="page-content admin-content">
-            <section class="admin-panel admin-form-panel">
-                <p class="eyebrow">{{ __('EDIT USER') }}</p>
-                <h1>{{ __('ユーザー情報を編集') }}</h1>
-                <form class="question-form" method="POST" action="{{ route('admin.users.update', $user) }}">
-                    @csrf
-                    @method('PUT')
-                    <label class="question-label" for="name">{{ __('お名前') }}</label>
-                    <input class="question-input" id="name" name="name" type="text" value="{{ old('name', $user->name) }}" required maxlength="255">
-                    @error('name')<p class="form-error">{{ $message }}</p>@enderror
+@extends('layouts.app')
 
-                    <label class="question-label" for="email">{{ __('メールアドレス') }}</label>
-                    <input class="question-input" id="email" name="email" type="email" value="{{ old('email', $user->email) }}" required maxlength="255">
-                    @error('email')<p class="form-error">{{ $message }}</p>@enderror
+@section('title', __('ユーザー編集'))
+@section('main_class', 'admin-content')
 
-                    <label class="question-label" for="is_admin">{{ __('権限') }}</label>
-                    @if (auth()->id() === $user->id)
-                        <input type="hidden" name="is_admin" value="{{ $user->is_admin ? 1 : 0 }}">
-                        <p class="readonly-value">{{ $user->isAdmin() ? 'Admin' : 'User' }}{{ __('（自分自身の権限は変更できません）') }}</p>
-                    @else
-                        <select class="question-input" id="is_admin" name="is_admin" required>
-                            <option value="0" @selected(! (bool) old('is_admin', $user->is_admin))>User</option>
-                            <option value="1" @selected((bool) old('is_admin', $user->is_admin))>Admin</option>
-                        </select>
-                    @endif
-                    @error('is_admin')<p class="form-error">{{ $message }}</p>@enderror
+@section('content')
+    <section class="admin-panel admin-form-panel">
+        <p class="eyebrow">{{ __('EDIT USER') }}</p>
+        <h1>{{ __('ユーザー情報を編集') }}</h1>
+        <form class="question-form" method="POST" action="{{ route('admin.users.update', $user) }}">
+            @csrf
+            @method('PUT')
+            <label class="question-label" for="name">{{ __('お名前') }}</label>
+            <input class="question-input" id="name" name="name" type="text" value="{{ old('name', $user->name) }}" required maxlength="255">
+            @error('name')<p class="form-error">{{ $message }}</p>@enderror
 
-                    <div class="admin-actions">
-                        <button class="primary-action" type="submit">{{ __('変更を保存') }}</button>
-                        <a class="secondary-action" href="{{ route('admin.users.show', $user) }}">{{ __('キャンセル') }}</a>
-                    </div>
-                </form>
-            </section>
-        </main>
-        @include('partials.site-footer')
-    </div>
-</body>
-</html>
+            <label class="question-label" for="email">{{ __('メールアドレス') }}</label>
+            <input class="question-input" id="email" name="email" type="email" value="{{ old('email', $user->email) }}" required maxlength="255">
+            @error('email')<p class="form-error">{{ $message }}</p>@enderror
+
+            <label class="question-label" for="is_admin">{{ __('権限') }}</label>
+            @if (auth()->id() === $user->id)
+                <input type="hidden" name="is_admin" value="{{ $user->is_admin ? 1 : 0 }}">
+                <p class="readonly-value">{{ $user->isAdmin() ? 'Admin' : 'User' }}{{ __('（自分自身の権限は変更できません）') }}</p>
+            @else
+                <select class="question-input" id="is_admin" name="is_admin" required>
+                    <option value="0" @selected(! (bool) old('is_admin', $user->is_admin))>User</option>
+                    <option value="1" @selected((bool) old('is_admin', $user->is_admin))>Admin</option>
+                </select>
+            @endif
+            @error('is_admin')<p class="form-error">{{ $message }}</p>@enderror
+
+            <div class="admin-actions">
+                <button class="primary-action" type="submit">{{ __('変更を保存') }}</button>
+                <a class="secondary-action" href="{{ route('admin.users.show', $user) }}">{{ __('キャンセル') }}</a>
+            </div>
+        </form>
+    </section>
+@endsection

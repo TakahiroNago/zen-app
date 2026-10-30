@@ -1,213 +1,204 @@
-<div>
-    <!-- Simplicity is the ultimate sophistication. - Leonardo da Vinci -->
-</div>
-<!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ __('アカウント設定') }} | {{ __('心の庵') }} ZEN REFLECTIONS</title>
-    @vite(['resources/css/app.css'])
-</head>
-<body>
-    <div class="page-frame">
-        @include('partials.site-header')
-        <main class="page-content admin-content">
-            <section class="admin-panel account-settings-panel">
-                <p class="eyebrow">{{ __('ACCOUNT SETTINGS') }}</p>
-                <h1>{{ __('アカウント設定') }}</h1>
+@extends('layouts.app')
 
-                @if (session('status'))
-                    @include('partials.toast', ['message' => __(session('status'))])
+@section('title', __('アカウント設定'))
+@section('main_class', 'admin-content')
+
+@section('content')
+    <section class="admin-panel account-settings-panel">
+        <p class="eyebrow">{{ __('ACCOUNT SETTINGS') }}</p>
+        <h1>{{ __('アカウント設定') }}</h1>
+
+        @if (session('status'))
+            @include('partials.toast', ['message' => __(session('status'))])
+        @endif
+        @if ($errors->has('account'))
+            @include('partials.toast', ['message' => __($errors->first('account')), 'type' => 'error'])
+        @endif
+        @if ($errors->has('billing'))
+            @include('partials.toast', ['message' => __($errors->first('billing')), 'type' => 'error'])
+        @endif
+        <div class="toast-region" data-toast-region data-account-settings-notice data-error-message="{{ __('更新に失敗しました。時間をおいて再度お試しください。') }}" aria-live="polite"></div>
+
+        <section class="account-settings-section">
+            <h2>{{ __('登録情報') }}</h2>
+            <form class="question-form" method="POST" action="{{ route('account.settings.update') }}" data-account-settings-form>
+                @csrf
+                @method('PUT')
+                <label class="question-label" for="name">{{ __('お名前') }}</label>
+                <input class="question-input" id="name" name="name" type="text" value="{{ old('name', $user->name) }}" autocomplete="name" required maxlength="255">
+                @error('name')<p class="form-error" role="alert">{{ __($message) }}</p>@enderror
+
+                <button class="primary-action" type="submit">{{ __('お名前を変更') }}</button>
+            </form>
+
+            <form class="question-form" method="POST" action="{{ route('account.settings.email.update') }}" data-account-settings-form>
+                @csrf
+                @method('PUT')
+                <label class="question-label" for="email">{{ __('メールアドレス') }}</label>
+                <input class="question-input" id="email" name="email" type="email" value="{{ old('email', $user->email) }}" autocomplete="email" required maxlength="255">
+                @error('email')<p class="form-error" role="alert">{{ __($message) }}</p>@enderror
+                <p class="settings-note">{{ __('入力したメールアドレスに確認メールを送信します。メール内のリンクを開くまで登録情報は変更されません。') }}</p>
+                @if ($user->google_id !== null)
+                    <p class="settings-note">{{ __('Googleアカウントでログインしている場合、メールアドレスを変更してもGoogleログインには元の連携アカウントを使用します。') }}</p>
                 @endif
-                @if ($errors->has('account'))
-                    @include('partials.toast', ['message' => __($errors->first('account')), 'type' => 'error'])
-                @endif
-                @if ($errors->has('billing'))
-                    @include('partials.toast', ['message' => __($errors->first('billing')), 'type' => 'error'])
-                @endif
-                <div class="toast-region" data-toast-region data-account-settings-notice data-error-message="{{ __('更新に失敗しました。時間をおいて再度お試しください。') }}" aria-live="polite"></div>
 
-                <section class="account-settings-section">
-                    <h2>{{ __('登録情報') }}</h2>
-                    <form class="question-form" method="POST" action="{{ route('account.settings.update') }}" data-account-settings-form>
-                        @csrf
-                        @method('PUT')
-                        <label class="question-label" for="name">{{ __('お名前') }}</label>
-                        <input class="question-input" id="name" name="name" type="text" value="{{ old('name', $user->name) }}" autocomplete="name" required maxlength="255">
-                        @error('name')<p class="form-error" role="alert">{{ __($message) }}</p>@enderror
+                <button class="primary-action" type="submit">{{ __('メールアドレスを変更') }}</button>
+            </form>
+        </section>
 
-                        <button class="primary-action" type="submit">{{ __('お名前を変更') }}</button>
-                    </form>
+        <section class="account-settings-section">
+            <h2>{{ __('セキュリティ通知') }}</h2>
+            <p class="settings-note">{{ __('アカウントに関するセキュリティ通知をメールで受け取るか、通知の種類ごとに設定できます。') }}</p>
+            <form class="question-form" method="POST" action="{{ route('account.settings.security-notifications.update') }}" data-account-settings-form>
+                @csrf
+                @method('PUT')
+                @php($selectedNotificationTypes = (array) old('types', $user->security_notification_types ?? array_keys(\App\Notifications\AccountActivityNotification::configurableActivityTypes())))
+                @php($selectedNotificationTypes = collect($selectedNotificationTypes)->flatMap(fn (string $type): array => $notificationTypeGroups[$type]['types'] ?? [$type])->all())
+                @php($securityNotificationsEnabled = old('enabled', $user->security_notifications_enabled ?? true))
+                <label class="remember-option security-notification-switch">
+                    <input name="enabled" type="checkbox" value="1" data-security-notifications-enabled @checked($securityNotificationsEnabled)>
+                    {{ __('セキュリティ通知を受け取る') }}
+                </label>
+                @error('enabled')<p class="form-error" role="alert">{{ __($message) }}</p>@enderror
 
-                    <form class="question-form" method="POST" action="{{ route('account.settings.email.update') }}" data-account-settings-form>
-                        @csrf
-                        @method('PUT')
-                        <label class="question-label" for="email">{{ __('メールアドレス') }}</label>
-                        <input class="question-input" id="email" name="email" type="email" value="{{ old('email', $user->email) }}" autocomplete="email" required maxlength="255">
-                        @error('email')<p class="form-error" role="alert">{{ __($message) }}</p>@enderror
-                        <p class="settings-note">{{ __('入力したメールアドレスに確認メールを送信します。メール内のリンクを開くまで登録情報は変更されません。') }}</p>
-                        @if ($user->google_id !== null)
-                            <p class="settings-note">{{ __('Googleアカウントでログインしている場合、メールアドレスを変更してもGoogleログインには元の連携アカウントを使用します。') }}</p>
-                        @endif
-
-                        <button class="primary-action" type="submit">{{ __('メールアドレスを変更') }}</button>
-                    </form>
-                </section>
-
-                <section class="account-settings-section">
-                    <h2>{{ __('セキュリティ通知') }}</h2>
-                    <p class="settings-note">{{ __('アカウントに関するセキュリティ通知をメールで受け取るか、通知の種類ごとに設定できます。') }}</p>
-                    <form class="question-form" method="POST" action="{{ route('account.settings.security-notifications.update') }}" data-account-settings-form>
-                        @csrf
-                        @method('PUT')
-                        @php($selectedNotificationTypes = (array) old('types', $user->security_notification_types ?? array_keys(\App\Notifications\AccountActivityNotification::configurableActivityTypes())))
-                        @php($selectedNotificationTypes = collect($selectedNotificationTypes)->flatMap(fn (string $type): array => $notificationTypeGroups[$type]['types'] ?? [$type])->all())
-                        @php($securityNotificationsEnabled = old('enabled', $user->security_notifications_enabled ?? true))
+                <fieldset data-security-notification-types @disabled(! $securityNotificationsEnabled)>
+                    <legend class="question-label">{{ __('通知の種類') }}</legend>
+                    @foreach ($notificationTypeGroups as $group => $notificationTypeGroup)
+                        @php($types = $notificationTypeGroup['types'])
+                        @php($groupEnabled = count(array_intersect($types, $selectedNotificationTypes)) > 0)
                         <label class="remember-option security-notification-switch">
-                            <input name="enabled" type="checkbox" value="1" data-security-notifications-enabled @checked($securityNotificationsEnabled)>
-                            {{ __('セキュリティ通知を受け取る') }}
+                            <input name="types[]" type="checkbox" value="{{ $group }}" @checked($groupEnabled)>
+                            {{ __($notificationTypeGroup['label']) }}
                         </label>
-                        @error('enabled')<p class="form-error" role="alert">{{ __($message) }}</p>@enderror
+                    @endforeach
+                </fieldset>
+                @error('types')<p class="form-error" role="alert">{{ __($message) }}</p>@enderror
+                @error('types.*')<p class="form-error" role="alert">{{ __($message) }}</p>@enderror
 
-                        <fieldset data-security-notification-types @disabled(! $securityNotificationsEnabled)>
-                            <legend class="question-label">{{ __('通知の種類') }}</legend>
-                            @foreach ($notificationTypeGroups as $group => $notificationTypeGroup)
-                                @php($types = $notificationTypeGroup['types'])
-                                @php($groupEnabled = count(array_intersect($types, $selectedNotificationTypes)) > 0)
-                                <label class="remember-option security-notification-switch">
-                                    <input name="types[]" type="checkbox" value="{{ $group }}" @checked($groupEnabled)>
-                                    {{ __($notificationTypeGroup['label']) }}
-                                </label>
-                            @endforeach
-                        </fieldset>
-                        @error('types')<p class="form-error" role="alert">{{ __($message) }}</p>@enderror
-                        @error('types.*')<p class="form-error" role="alert">{{ __($message) }}</p>@enderror
+                <button class="primary-action" type="submit" data-security-notifications-save disabled>{{ __('通知設定を保存') }}</button>
+            </form>
+        </section>
 
-                        <button class="primary-action" type="submit" data-security-notifications-save disabled>{{ __('通知設定を保存') }}</button>
-                    </form>
-                </section>
+        <section class="account-settings-section">
+            <h2>{{ __('契約・お支払い') }}</h2>
+            <p class="form-notice" role="status">
+                {{ __('現在のプラン') }}{{ app()->isLocale('ja') ? '：' : ': ' }}{{ $user->plan === \App\Models\User::PLAN_PREMIUM ? __('プレミアム') : ($user->plan === \App\Models\User::PLAN_LITE ? __('ライト') : __('無料')) }}{{ $user->stripe_subscription_interval === 'year' ? '('.__('年額').')' : ($user->stripe_subscription_interval === 'month' ? '('.__('月額').')' : '') }}
+                @if ($user->stripe_cancel_at_period_end && $user->stripe_current_period_end)
+                    <br>{{ app()->isLocale('ja') ? $user->stripe_current_period_end->format('Y年n月j日').'に終了予定' : __('契約終了予定: :date', ['date' => $user->stripe_current_period_end->format('M j, Y')]) }}
+                @endif
+            </p>
+            @if (request('billing') === 'returned')
+                <p class="settings-note" role="status">{{ __('Stripeの管理画面から戻りました。契約内容の変更はWebhookで反映されるため、反映まで時間がかかる場合があります。最新の状態を確認するには、このページを再読み込みしてください。') }}</p>
+            @endif
+            @if ($user->stripe_subscription_id !== null && in_array($user->plan, [\App\Models\User::PLAN_LITE, \App\Models\User::PLAN_PREMIUM], true) && $user->stripe_scheduled_plan === null && $user->stripe_scheduled_interval === null)
+                <p role="status">{{ __('自動更新') }}{{ app()->isLocale('ja') ? '：' : ': ' }}{{ $user->stripe_cancel_at_period_end ? __('オフ') : __('オン') }}</p>
+            @endif
+            @if ($user->stripe_scheduled_interval !== null && $user->stripe_current_period_end)
+                <p role="status">{{ __('お支払い周期を:intervalへ変更予定', ['interval' => $user->stripe_scheduled_interval === 'year' ? __('年額') : __('月額')]) }}{{ app()->isLocale('ja') ? '：' : ': ' }}{{ $user->stripe_current_period_end->format(app()->isLocale('ja') ? 'Y年n月j日' : 'M j, Y') }}</p>
+                <form class="billing-action-form" method="POST" action="{{ route('billing.plan.cancel') }}">
+                    @csrf
+                    @method('DELETE')
+                    <button class="secondary-action" type="submit">{{ __('プラン変更の予約を取り消す') }}</button>
+                </form>
+            @elseif ($user->stripe_scheduled_plan === \App\Models\User::PLAN_LITE && $user->stripe_current_period_end)
+                <p role="status">
+                    {{ app()->isLocale('ja') ? $user->stripe_current_period_end->format('Y年n月j日').'にライトプランへ切り替わる予定です。' : __('ライトプランへの切り替え予定日').' '.$user->stripe_current_period_end->format('M j, Y') }}
+                </p>
+                <form class="billing-action-form" method="POST" action="{{ route('billing.plan.cancel') }}">
+                    @csrf
+                    @method('DELETE')
+                    <button class="secondary-action" type="submit">{{ __('プラン変更の予約を取り消す') }}</button>
+                </form>
+            @elseif ($user->stripe_cancel_at_period_end && $user->stripe_subscription_id !== null)
+                <p role="status">{{ __('契約期間終了時に解約されます。期間終了までは現在のプランをご利用いただけます。') }}</p>
+                <form class="billing-action-form" method="POST" action="{{ route('billing.plan.cancel') }}">
+                    @csrf
+                    @method('DELETE')
+                    <button class="secondary-action" type="submit">{{ __('自動更新をオンにする') }}</button>
+                </form>
+            @elseif ($user->stripe_subscription_id !== null && $user->plan === \App\Models\User::PLAN_LITE && ! $user->stripe_cancel_at_period_end && $user->stripe_scheduled_plan === null && $user->stripe_scheduled_interval === null)
+                <form class="billing-action-form" method="POST" action="{{ route('billing.plan.change') }}" data-plan-change-form data-plan-options-in-dialog="premium" data-confirmation-note="{{ __('プレミアムプランへの変更は即時適用され、現在の期間の未使用分は日割り計算で今回の請求に充当されます。') }}">
+                    @csrf
+                    <input type="hidden" name="plan" value="premium">
+                    <button class="primary-action" type="submit">{{ __('プレミアムプランへ変更') }}</button>
+                </form>
+            @elseif ($user->stripe_subscription_id !== null && $user->plan === \App\Models\User::PLAN_PREMIUM && ! $user->stripe_cancel_at_period_end && $user->stripe_scheduled_plan === null && $user->stripe_scheduled_interval === null)
+                <form id="account-lite-plan-change-form" class="billing-action-form" method="POST" action="{{ route('billing.plan.change') }}" data-plan-change-form data-plan-options-in-dialog="lite" data-plan-timing-in-dialog="lite" data-confirmation-period-end-label="{{ $user->stripe_current_period_end ? __('現在のプレミアム期間終了日時:') : '' }}" data-confirmation-period-end-date="{{ $user->stripe_current_period_end?->format(app()->isLocale('ja') ? 'Y年n月j日 H:i' : 'M j, Y H:i') ?? '' }}">
+                    @csrf
+                    <input type="hidden" name="plan" value="lite">
+                    <button class="secondary-action" type="submit">{{ __('ライトプランへ変更') }}</button>
+                </form>
+            @endif
+            @if ($user->stripe_subscription_id !== null && in_array($user->plan, [\App\Models\User::PLAN_LITE, \App\Models\User::PLAN_PREMIUM], true) && ! $user->stripe_cancel_at_period_end && $user->stripe_scheduled_plan === null && $user->stripe_scheduled_interval === null)
+                <form class="billing-action-form" method="POST" action="{{ route('billing.subscription.cancel') }}" data-plan-change-form data-confirmation-note="{{ __('契約期間終了時に解約します。期間終了までは現在のプランをご利用いただけます。') }}" data-confirmation-period-end-label="{{ $user->stripe_current_period_end ? __('現在の契約期間終了日時:') : '' }}" data-confirmation-period-end-date="{{ $user->stripe_current_period_end?->format(app()->isLocale('ja') ? 'Y年n月j日 H:i' : 'M j, Y H:i') ?? '' }}">
+                    @csrf
+                    <input type="hidden" name="timing" value="period_end">
+                    <button class="secondary-action" type="submit">{{ __('自動更新をオフにする') }}</button>
+                </form>
+            @endif
+            @if (
+                $user->stripe_subscription_id !== null
+                && in_array($user->plan, [\App\Models\User::PLAN_LITE, \App\Models\User::PLAN_PREMIUM], true)
+                && ! $user->stripe_cancel_at_period_end
+                && $user->stripe_scheduled_plan === null
+                && $user->stripe_scheduled_interval === null
+                && is_string(config('services.stripe.secret'))
+                && config('services.stripe.secret') !== ''
+                && (
+                    ($user->stripe_subscription_interval === 'month' && is_string($yearlyPrice) && $yearlyPrice !== '')
+                    || ($user->stripe_subscription_interval === 'year' && is_string($monthlyPrice) && $monthlyPrice !== '')
+                )
+            )
+                <form class="billing-action-form" method="POST" action="{{ route('billing.plan.change') }}" data-plan-change-form data-confirmation-note="{{ __('お支払い周期の変更は現在の契約期間終了後に適用されます。') }}" data-confirmation-period-end-label="{{ $user->stripe_current_period_end ? __('現在の契約期間終了日時:') : '' }}" data-confirmation-period-end-date="{{ $user->stripe_current_period_end?->format(app()->isLocale('ja') ? 'Y年n月j日 H:i' : 'M j, Y H:i') ?? '' }}">
+                    @csrf
+                    <input type="hidden" name="plan" value="{{ $user->stripe_subscription_interval === 'year' ? $billingProductPrefix : $billingProductPrefix.'_yearly' }}">
+                    <input type="hidden" name="timing" value="period_end">
+                    <button class="secondary-action" type="submit">{{ $user->stripe_subscription_interval === 'year' ? __('月額プランに切り替える') : __('年額プランに切り替える') }}</button>
+                </form>
+            @endif
+            @if ($user->stripe_customer_id !== null && ! ($user->stripe_subscription_id !== null && $user->plan === \App\Models\User::PLAN_PREMIUM && ! $user->stripe_cancel_at_period_end))
+                <form class="billing-action-form" method="POST" action="{{ route('billing.portal') }}">
+                    @csrf
+                    @if ($user->stripe_subscription_id !== null)
+                        <button class="secondary-action" type="submit">{{ __('契約・お支払いを管理(Stripe)') }}</button>
+                    @else
+                        <button class="text-link" type="submit">{{ __('お支払い情報を管理（Stripe）') }}</button>
+                    @endif
+                </form>
+            @endif
+            @if ($user->stripe_customer_id !== null && $user->stripe_subscription_id !== null && $user->plan === \App\Models\User::PLAN_PREMIUM && ! $user->stripe_cancel_at_period_end)
+                <form class="billing-action-form" method="POST" action="{{ route('billing.portal') }}">
+                    @csrf
+                    <button class="secondary-action" type="submit">{{ __('契約・お支払いを管理(Stripe)') }}</button>
+                </form>
+            @endif
+            @if ($user->stripe_subscription_id !== null && in_array($user->plan, [\App\Models\User::PLAN_LITE, \App\Models\User::PLAN_PREMIUM], true) && ! $user->stripe_cancel_at_period_end && $user->stripe_scheduled_plan === null && $user->stripe_scheduled_interval === null)
+                <form class="billing-action-form" method="POST" action="{{ route('billing.subscription.cancel') }}" data-plan-change-form data-confirmation-note="{{ __('返金対象となるお支払いがある場合は未使用期間分を返金し、すぐに解約します。') }}">
+                    @csrf
+                    <input type="hidden" name="timing" value="immediate">
+                    <button class="secondary-action" type="submit">{{ __('プランを解約') }}</button>
+                </form>
+            @endif
+        </section>
 
-                <section class="account-settings-section">
-                    <h2>{{ __('契約・お支払い') }}</h2>
-                    <p class="form-notice" role="status">
-                        {{ __('現在のプラン') }}{{ app()->isLocale('ja') ? '：' : ': ' }}{{ $user->plan === \App\Models\User::PLAN_PREMIUM ? __('プレミアム') : ($user->plan === \App\Models\User::PLAN_LITE ? __('ライト') : __('無料')) }}{{ $user->stripe_subscription_interval === 'year' ? '('.__('年額').')' : ($user->stripe_subscription_interval === 'month' ? '('.__('月額').')' : '') }}
-                        @if ($user->stripe_cancel_at_period_end && $user->stripe_current_period_end)
-                            <br>{{ app()->isLocale('ja') ? $user->stripe_current_period_end->format('Y年n月j日').'に終了予定' : __('契約終了予定: :date', ['date' => $user->stripe_current_period_end->format('M j, Y')]) }}
-                        @endif
-                    </p>
-                    @if (request('billing') === 'returned')
-                        <p class="settings-note" role="status">{{ __('Stripeの管理画面から戻りました。契約内容の変更はWebhookで反映されるため、反映まで時間がかかる場合があります。最新の状態を確認するには、このページを再読み込みしてください。') }}</p>
-                    @endif
-                    @if ($user->stripe_subscription_id !== null && in_array($user->plan, [\App\Models\User::PLAN_LITE, \App\Models\User::PLAN_PREMIUM], true) && $user->stripe_scheduled_plan === null && $user->stripe_scheduled_interval === null)
-                        <p role="status">{{ __('自動更新') }}{{ app()->isLocale('ja') ? '：' : ': ' }}{{ $user->stripe_cancel_at_period_end ? __('オフ') : __('オン') }}</p>
-                    @endif
-                    @if ($user->stripe_scheduled_interval !== null && $user->stripe_current_period_end)
-                        <p role="status">{{ __('お支払い周期を:intervalへ変更予定', ['interval' => $user->stripe_scheduled_interval === 'year' ? __('年額') : __('月額')]) }}{{ app()->isLocale('ja') ? '：' : ': ' }}{{ $user->stripe_current_period_end->format(app()->isLocale('ja') ? 'Y年n月j日' : 'M j, Y') }}</p>
-                        <form class="billing-action-form" method="POST" action="{{ route('billing.plan.cancel') }}">
-                            @csrf
-                            @method('DELETE')
-                            <button class="secondary-action" type="submit">{{ __('プラン変更の予約を取り消す') }}</button>
-                        </form>
-                    @elseif ($user->stripe_scheduled_plan === \App\Models\User::PLAN_LITE && $user->stripe_current_period_end)
-                        <p role="status">
-                            {{ app()->isLocale('ja') ? $user->stripe_current_period_end->format('Y年n月j日').'にライトプランへ切り替わる予定です。' : __('ライトプランへの切り替え予定日').' '.$user->stripe_current_period_end->format('M j, Y') }}
-                        </p>
-                        <form class="billing-action-form" method="POST" action="{{ route('billing.plan.cancel') }}">
-                            @csrf
-                            @method('DELETE')
-                            <button class="secondary-action" type="submit">{{ __('プラン変更の予約を取り消す') }}</button>
-                        </form>
-                    @elseif ($user->stripe_cancel_at_period_end && $user->stripe_subscription_id !== null)
-                        <p role="status">{{ __('契約期間終了時に解約されます。期間終了までは現在のプランをご利用いただけます。') }}</p>
-                        <form class="billing-action-form" method="POST" action="{{ route('billing.plan.cancel') }}">
-                            @csrf
-                            @method('DELETE')
-                            <button class="secondary-action" type="submit">{{ __('自動更新をオンにする') }}</button>
-                        </form>
-                    @elseif ($user->stripe_subscription_id !== null && $user->plan === \App\Models\User::PLAN_LITE && ! $user->stripe_cancel_at_period_end && $user->stripe_scheduled_plan === null && $user->stripe_scheduled_interval === null)
-                        <form class="billing-action-form" method="POST" action="{{ route('billing.plan.change') }}" data-plan-change-form data-plan-options-in-dialog="premium" data-confirmation-note="{{ __('プレミアムプランへの変更は即時適用され、現在の期間の未使用分は日割り計算で今回の請求に充当されます。') }}">
-                            @csrf
-                            <input type="hidden" name="plan" value="premium">
-                            <button class="primary-action" type="submit">{{ __('プレミアムプランへ変更') }}</button>
-                        </form>
-                    @elseif ($user->stripe_subscription_id !== null && $user->plan === \App\Models\User::PLAN_PREMIUM && ! $user->stripe_cancel_at_period_end && $user->stripe_scheduled_plan === null && $user->stripe_scheduled_interval === null)
-                        <form id="account-lite-plan-change-form" class="billing-action-form" method="POST" action="{{ route('billing.plan.change') }}" data-plan-change-form data-plan-options-in-dialog="lite" data-plan-timing-in-dialog="lite" data-confirmation-period-end-label="{{ $user->stripe_current_period_end ? __('現在のプレミアム期間終了日時:') : '' }}" data-confirmation-period-end-date="{{ $user->stripe_current_period_end?->format(app()->isLocale('ja') ? 'Y年n月j日 H:i' : 'M j, Y H:i') ?? '' }}">
-                            @csrf
-                            <input type="hidden" name="plan" value="lite">
-                            <button class="secondary-action" type="submit">{{ __('ライトプランへ変更') }}</button>
-                        </form>
-                    @endif
-                    @if ($user->stripe_subscription_id !== null && in_array($user->plan, [\App\Models\User::PLAN_LITE, \App\Models\User::PLAN_PREMIUM], true) && ! $user->stripe_cancel_at_period_end && $user->stripe_scheduled_plan === null && $user->stripe_scheduled_interval === null)
-                        <form class="billing-action-form" method="POST" action="{{ route('billing.subscription.cancel') }}" data-plan-change-form data-confirmation-note="{{ __('契約期間終了時に解約します。期間終了までは現在のプランをご利用いただけます。') }}" data-confirmation-period-end-label="{{ $user->stripe_current_period_end ? __('現在の契約期間終了日時:') : '' }}" data-confirmation-period-end-date="{{ $user->stripe_current_period_end?->format(app()->isLocale('ja') ? 'Y年n月j日 H:i' : 'M j, Y H:i') ?? '' }}">
-                            @csrf
-                            <input type="hidden" name="timing" value="period_end">
-                            <button class="secondary-action" type="submit">{{ __('自動更新をオフにする') }}</button>
-                        </form>
-                    @endif
-                    @if (
-                        $user->stripe_subscription_id !== null
-                        && in_array($user->plan, [\App\Models\User::PLAN_LITE, \App\Models\User::PLAN_PREMIUM], true)
-                        && ! $user->stripe_cancel_at_period_end
-                        && $user->stripe_scheduled_plan === null
-                        && $user->stripe_scheduled_interval === null
-                        && is_string(config('services.stripe.secret'))
-                        && config('services.stripe.secret') !== ''
-                        && (
-                            ($user->stripe_subscription_interval === 'month' && is_string($yearlyPrice) && $yearlyPrice !== '')
-                            || ($user->stripe_subscription_interval === 'year' && is_string($monthlyPrice) && $monthlyPrice !== '')
-                        )
-                    )
-                        <form class="billing-action-form" method="POST" action="{{ route('billing.plan.change') }}" data-plan-change-form data-confirmation-note="{{ __('お支払い周期の変更は現在の契約期間終了後に適用されます。') }}" data-confirmation-period-end-label="{{ $user->stripe_current_period_end ? __('現在の契約期間終了日時:') : '' }}" data-confirmation-period-end-date="{{ $user->stripe_current_period_end?->format(app()->isLocale('ja') ? 'Y年n月j日 H:i' : 'M j, Y H:i') ?? '' }}">
-                            @csrf
-                            <input type="hidden" name="plan" value="{{ $user->stripe_subscription_interval === 'year' ? $billingProductPrefix : $billingProductPrefix.'_yearly' }}">
-                            <input type="hidden" name="timing" value="period_end">
-                            <button class="secondary-action" type="submit">{{ $user->stripe_subscription_interval === 'year' ? __('月額プランに切り替える') : __('年額プランに切り替える') }}</button>
-                        </form>
-                    @endif
-                    @if ($user->stripe_customer_id !== null && ! ($user->stripe_subscription_id !== null && $user->plan === \App\Models\User::PLAN_PREMIUM && ! $user->stripe_cancel_at_period_end))
-                        <form class="billing-action-form" method="POST" action="{{ route('billing.portal') }}">
-                            @csrf
-                            @if ($user->stripe_subscription_id !== null)
-                                <button class="secondary-action" type="submit">{{ __('契約・お支払いを管理(Stripe)') }}</button>
-                            @else
-                                <button class="text-link" type="submit">{{ __('お支払い情報を管理（Stripe）') }}</button>
-                            @endif
-                        </form>
-                    @endif
-                    @if ($user->stripe_customer_id !== null && $user->stripe_subscription_id !== null && $user->plan === \App\Models\User::PLAN_PREMIUM && ! $user->stripe_cancel_at_period_end)
-                        <form class="billing-action-form" method="POST" action="{{ route('billing.portal') }}">
-                            @csrf
-                            <button class="secondary-action" type="submit">{{ __('契約・お支払いを管理(Stripe)') }}</button>
-                        </form>
-                    @endif
-                    @if ($user->stripe_subscription_id !== null && in_array($user->plan, [\App\Models\User::PLAN_LITE, \App\Models\User::PLAN_PREMIUM], true) && ! $user->stripe_cancel_at_period_end && $user->stripe_scheduled_plan === null && $user->stripe_scheduled_interval === null)
-                        <form class="billing-action-form" method="POST" action="{{ route('billing.subscription.cancel') }}" data-plan-change-form data-confirmation-note="{{ __('返金対象となるお支払いがある場合は未使用期間分を返金し、すぐに解約します。') }}">
-                            @csrf
-                            <input type="hidden" name="timing" value="immediate">
-                            <button class="secondary-action" type="submit">{{ __('プランを解約') }}</button>
-                        </form>
-                    @endif
-                </section>
+        <section class="account-settings-section account-deletion-section">
+            <h2>{{ __('アカウント削除') }}</h2>
+            <p>{{ __('アカウントを削除すると、相談の記録や保有クレジットを含む登録情報が削除され、元に戻すことはできません。有料プランをご利用中の場合は、関連する契約も解約されます。') }}</p>
+            @if ($user->google_id !== null)
+                <p class="settings-note">{{ __('削除には現在のパスワードが必要です。Googleログインのみをご利用の場合は、一度ログアウトし、ログイン画面の「パスワードをお忘れですか？」からパスワードを設定して、再度ログインしてください。') }}</p>
+            @endif
+            <form id="delete-account-form" class="question-form" method="POST" action="{{ route('account.settings.destroy') }}" data-delete-account-form data-verify-url="{{ route('account.settings.verify-password') }}">
+                @csrf
+                @method('DELETE')
+                @error('password')<p class="form-error" role="alert">{{ __($message) }}</p>@enderror
+                <button class="danger-action" type="button" data-delete-account-open>{{ __('アカウントを削除する') }}</button>
+            </form>
+        </section>
+        <a class="text-link" href="{{ route('zen') }}">→ {{ __('相談に戻る') }}</a>
+    </section>
+@endsection
 
-                <section class="account-settings-section account-deletion-section">
-                    <h2>{{ __('アカウント削除') }}</h2>
-                    <p>{{ __('アカウントを削除すると、相談の記録や保有クレジットを含む登録情報が削除され、元に戻すことはできません。有料プランをご利用中の場合は、関連する契約も解約されます。') }}</p>
-                    @if ($user->google_id !== null)
-                        <p class="settings-note">{{ __('削除には現在のパスワードが必要です。Googleログインのみをご利用の場合は、一度ログアウトし、ログイン画面の「パスワードをお忘れですか？」からパスワードを設定して、再度ログインしてください。') }}</p>
-                    @endif
-                    <form id="delete-account-form" class="question-form" method="POST" action="{{ route('account.settings.destroy') }}" data-delete-account-form data-verify-url="{{ route('account.settings.verify-password') }}">
-                        @csrf
-                        @method('DELETE')
-                        @error('password')<p class="form-error" role="alert">{{ __($message) }}</p>@enderror
-                        <button class="danger-action" type="button" data-delete-account-open>{{ __('アカウントを削除する') }}</button>
-                    </form>
-                </section>
-                <a class="text-link" href="{{ route('zen') }}">→ {{ __('相談に戻る') }}</a>
-            </section>
-        </main>
-        @include('partials.site-footer')
-    </div>
+@push('page_end')
     @include('partials.plan-change-dialog')
     <dialog class="confirm-dialog" data-delete-account-dialog aria-labelledby="delete-account-dialog-title">
         <h2 class="danger-title" id="delete-account-dialog-title">{{ __('アカウントを削除する') }}</h2>
@@ -239,5 +230,4 @@
             });
         });
     </script>
-</body>
-</html>
+@endpush
