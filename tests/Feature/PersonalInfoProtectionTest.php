@@ -82,7 +82,8 @@ test('an anonymized suggestion is offered and can be sent without being hidden',
     $this->actingAs($user)
         ->withSession(['anonymized_concern' => '同僚の[氏名]と上手くいきません'])
         ->get(route('zen'))
-        ->assertSee('この内容で相談する');
+        ->assertSee('この内容で相談する')
+        ->assertSeeInOrder(['data-submitting-label="読み解いています..."', 'data-submitting-label="読み解いています..."'], false);
 
     $response = $this->actingAs($user)
         ->post(route('zen.respond'), ['concern' => '同僚の[氏名]と上手くいきません'])

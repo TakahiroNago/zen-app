@@ -330,14 +330,8 @@ a {
     content: '';
 }
 
-.account-menu:hover .account-popover,
-.account-menu:focus-within .account-popover,
 .account-menu.is-open .account-popover {
     display: block;
-}
-
-.account-menu.is-dismissed .account-popover {
-    display: none;
 }
 
 .account-profile {

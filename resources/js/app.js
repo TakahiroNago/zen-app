@@ -55,19 +55,40 @@ document.querySelectorAll('[data-local-time]').forEach((timeElement) => {
 	timeElement.textContent = `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 });
 
-if (plansPanel && accountMenu && accountPopover && accountMenu.classList.contains('is-open')) {
-	const dismissAccountPopover = () => {
-		accountMenu.classList.remove('is-open');
-		accountMenu.classList.add('is-dismissed');
+if (accountMenu && accountPopover && accountMenuTrigger) {
+	const setAccountMenuOpen = (isOpen) => {
+		accountMenu.classList.toggle('is-open', isOpen);
+		accountMenuTrigger.setAttribute('aria-expanded', String(isOpen));
 	};
 
+	const isAccountMenuOpen = () => accountMenu.classList.contains('is-open');
+
+	accountMenuTrigger.addEventListener('click', () => {
+		setAccountMenuOpen(!isAccountMenuOpen());
+	});
+
 	document.addEventListener('click', (event) => {
-		if (!accountPopover.contains(event.target) && !accountMenuTrigger?.contains(event.target)) {
-			dismissAccountPopover();
+		if (isAccountMenuOpen() && !accountMenu.contains(event.target)) {
+			setAccountMenuOpen(false);
 		}
 	});
 
-	window.addEventListener('scroll', dismissAccountPopover, { passive: true });
+	accountMenu.addEventListener('keydown', (event) => {
+		if (event.key === 'Escape' && isAccountMenuOpen()) {
+			setAccountMenuOpen(false);
+			accountMenuTrigger.focus();
+		}
+	});
+
+	accountMenu.addEventListener('focusout', (event) => {
+		if (event.relatedTarget && !accountMenu.contains(event.relatedTarget)) {
+			setAccountMenuOpen(false);
+		}
+	});
+
+	if (plansPanel && isAccountMenuOpen()) {
+		window.addEventListener('scroll', () => setAccountMenuOpen(false), { passive: true, once: true });
+	}
 }
 
 const scheduleAutoDismiss = (notice) => {
@@ -347,9 +368,32 @@ if (accountSettingsNotice) {
 	}
 }
 
+const showSubmittingState = (form) => {
+	const submitButton = form.querySelector('button[type="submit"]');
+	const submitLabel = form.querySelector('.submit-label');
+
+	form.addEventListener('submit', () => {
+		form.classList.add('is-submitting');
+		form.setAttribute('aria-busy', 'true');
+		submitButton.disabled = true;
+
+		if (submitButton.dataset.submittingLabel) {
+			submitLabel.textContent = submitButton.dataset.submittingLabel;
+
+			return;
+		}
+
+		let dotCount = 1;
+		submitLabel.textContent = '.';
+		window.setInterval(() => {
+			dotCount = (dotCount % 3) + 1;
+			submitLabel.textContent = '.'.repeat(dotCount);
+		}, 400);
+	});
+};
+
 if (questionForm) {
 	const submitButton = questionForm.querySelector('button[type="submit"]');
-	const submitLabel = questionForm.querySelector('.submit-label');
 	const questionInput = questionForm.querySelector('[data-submit-on-enter]');
 
 	questionInput?.addEventListener('keydown', (event) => {
@@ -368,15 +412,11 @@ if (questionForm) {
 		}
 	});
 
-	questionForm.addEventListener('submit', () => {
-		questionForm.classList.add('is-submitting');
-		questionForm.setAttribute('aria-busy', 'true');
-		submitButton.disabled = true;
-		let dotCount = 1;
-		submitLabel.textContent = '.';
-		window.setInterval(() => {
-			dotCount = (dotCount % 3) + 1;
-			submitLabel.textContent = '.'.repeat(dotCount);
-		}, 400);
-	});
+	showSubmittingState(questionForm);
 }
+
+document.querySelectorAll('form:has(button[data-submitting-label])').forEach((form) => {
+	if (form !== questionForm) {
+		showSubmittingState(form);
+	}
+});
