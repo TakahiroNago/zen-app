@@ -377,6 +377,8 @@ test('lite members can immediately upgrade with Stripe prorations', function () 
             ->assertRedirect(route('account.settings.edit'))
             ->assertSessionHas('status', 'プレミアムプランへ切り替えました。日割り分は今回の請求に反映されています。');
 
+        $user->refresh();
+
         $this->get(route('account.settings.edit'))
             ->assertOk()
             ->assertSee('現在のプラン：プレミアム(月額)')
@@ -462,6 +464,8 @@ test('lite members can upgrade to annual premium with Stripe prorations', functi
             ->post(route('billing.plan.change'), ['plan' => 'premium_yearly'])
             ->assertRedirect(route('account.settings.edit'))
             ->assertSessionHas('status', 'プレミアムプランへ切り替えました。日割り分は今回の請求に反映されています。');
+
+        $user->refresh();
 
         $this->get(route('account.settings.edit'))
             ->assertOk()
@@ -803,6 +807,8 @@ test('premium members can switch to lite immediately and receive a prorated refu
             ->post(route('billing.plan.change'), ['plan' => User::PLAN_LITE, 'timing' => 'immediate'])
             ->assertRedirect(route('account.settings.edit'))
             ->assertSessionHas('status', '対象となるお支払いがある場合は未使用期間分を返金し、ライトプランへ切り替えました。');
+
+        $user->refresh();
 
         $this->get(route('account.settings.edit'))
             ->assertOk()

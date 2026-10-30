@@ -195,7 +195,7 @@ test('members with no credits see a full-width plans link and cannot draw a card
         ->assertOk()
         ->assertSee('href="'.route('plans').'"', false)
         ->assertSee('class="primary-action" type="submit" disabled', false)
-        ->assertSee('本日利用可能なクレジットを使い切りました。→有料プランを見る');
+        ->assertSee('本日利用可能なクレジットを使い切りました。→ 有料プランを見る');
 });
 
 test('the result page links the entire exhausted member-credit notice to plans', function () {
