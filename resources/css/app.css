@@ -579,8 +579,21 @@ h2 {
 }
 
 .page-description.question-privacy-note {
+    margin-bottom: 0;
     font-size: 12px;
     line-height: 1.7;
+}
+
+.question-character-count {
+    margin: -4px 0 0;
+    color: var(--color-muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.question-character-count.is-near-limit {
+    color: var(--color-error);
 }
 
 .question-form {
@@ -910,6 +923,18 @@ h2 {
     white-space: nowrap;
 }
 
+.result-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px 28px;
+    margin-top: 28px;
+}
+
+.result-actions .text-link {
+    margin-top: 0;
+}
+
 .result-section {
     padding-block: 18px;
     border-top: 1px solid var(--color-line);
@@ -923,6 +948,21 @@ h2 {
 .consultation-share {
     padding-block: 20px;
     border-top: 1px solid var(--color-line);
+}
+
+.consultation-share-details {
+    margin-top: 12px;
+}
+
+.consultation-share-details summary {
+    width: fit-content;
+    color: var(--color-forest);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.consultation-share-details summary:hover {
+    color: var(--color-coral);
 }
 
 .consultation-share-note {

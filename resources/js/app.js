@@ -39,6 +39,22 @@ document.querySelectorAll('[data-auto-grow]').forEach((textarea) => {
 	resizeTextarea();
 });
 
+document.querySelectorAll('[data-character-count-target]').forEach((input) => {
+	const counter = document.getElementById(input.dataset.characterCountTarget);
+	const count = counter?.querySelector('[data-character-count]');
+	if (!count) {
+		return;
+	}
+
+	const updateCount = () => {
+		count.textContent = String(input.value.length);
+		counter.classList.toggle('is-near-limit', input.value.length >= input.maxLength * 0.9);
+	};
+
+	input.addEventListener('input', updateCount);
+	updateCount();
+});
+
 historyTopicFilter?.addEventListener('change', () => {
 	historyTopicFilter.form?.requestSubmit();
 });
