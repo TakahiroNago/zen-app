@@ -38,18 +38,23 @@
         <form class="question-form" method="POST" action="{{ route('zen.respond') }}">
             @csrf
             <label class="question-label" for="concern">{{ __('あなたの思い') }}</label>
+            <p class="page-description question-privacy-note" id="concern-privacy-note">{{ __('氏名・住所・勤務先・電話番号・メールアドレスなどの個人情報は、ご自身や他の方のものも含めて書かないでください。') }}</p>
             <textarea
                 class="question-input question-auto-grow"
                 id="concern"
                 name="concern"
                 placeholder="{{ __('例：新しい一歩を踏み出すには？') }}"
                 rows="1"
-                maxlength="200"
+                maxlength="{{ App\Models\ZenConsultation::CONCERN_MAX_LENGTH }}"
+                aria-describedby="concern-privacy-note concern-character-count"
                 data-auto-grow
                 data-submit-on-enter
+                data-character-count-target="concern-character-count"
                 required
             >{{ old('concern') }}</textarea>
-            <p class="page-description question-privacy-note">{{ __('氏名・住所・勤務先・電話番号・メールアドレスなどの個人情報は、ご自身や他の方のものも含めて書かないでください。') }}</p>
+            <p class="question-character-count" id="concern-character-count">
+                <span data-character-count>{{ mb_strlen((string) old('concern')) }}</span> / {{ App\Models\ZenConsultation::CONCERN_MAX_LENGTH }}
+            </p>
             @error('concern')
                 <p class="form-error" role="alert">{{ $message }}</p>
             @enderror

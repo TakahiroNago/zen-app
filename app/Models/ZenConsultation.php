@@ -13,6 +13,8 @@ class ZenConsultation extends Model
 
     public const SUMMARY_MAX_LENGTH = 150;
 
+    public const CONCERN_MAX_LENGTH = 200;
+
     public const IMAGE_COUNT = 16;
 
     public const IMAGE_SIZE = 640;

@@ -54,7 +54,7 @@ class ZenController extends Controller
             'concern' => [
                 'required',
                 'string',
-                'max:200',
+                'max:'.ZenConsultation::CONCERN_MAX_LENGTH,
             ],
             'confirm_personal_info' => ['nullable', 'boolean'],
         ]);
@@ -66,7 +66,7 @@ class ZenController extends Controller
             return redirect()->route('zen')
                 ->withInput()
                 ->with('personal_info_detected', true)
-                ->with('anonymized_concern', $personalInfoDetector->detect($anonymizedConcern) === [] && mb_strlen($anonymizedConcern) <= 200 ? $anonymizedConcern : null)
+                ->with('anonymized_concern', $personalInfoDetector->detect($anonymizedConcern) === [] && mb_strlen($anonymizedConcern) <= ZenConsultation::CONCERN_MAX_LENGTH ? $anonymizedConcern : null)
                 ->withErrors([
                     'concern' => __('メールアドレス・電話番号・住所などの個人情報と思われる内容が含まれています。削除してから送信してください。このまま送信する場合は、下のチェックを入れてください。'),
                 ]);
