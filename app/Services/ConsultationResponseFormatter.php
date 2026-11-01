@@ -3,17 +3,46 @@
 namespace App\Services;
 
 use Illuminate\Support\Str;
+use League\CommonMark\Environment\EnvironmentBuilderInterface;
+use League\CommonMark\Event\DocumentParsedEvent;
+use League\CommonMark\Extension\CommonMark\Node\Inline\Image;
+use League\CommonMark\Extension\ExtensionInterface;
 
-class ConsultationResponseFormatter
+class ConsultationResponseFormatter implements ExtensionInterface
 {
-    public function toHtml(string $response): string
+    public function toHtml(#[\SensitiveParameter] string $response): string
     {
-        $html = Str::markdown($response, [
+        return (string) Str::markdown($response, [
             'html_input' => 'strip',
             'allow_unsafe_links' => false,
-        ]);
+        ], [$this]);
+    }
 
-        // CommonMark does not close emphasis after Japanese punctuation such as 」 when text follows it.
-        return preg_replace('/\*\*(?=\S)(.+?)(?<=\S)\*\*/u', '<strong>$1</strong>', $html) ?? $html;
+    public function register(EnvironmentBuilderInterface $environment): void
+    {
+        $environment
+            ->addInlineParser(new CjkFriendlyEmphasisParser, 100)
+            ->addEventListener(DocumentParsedEvent::class, $this->removeImages(...));
+    }
+
+    /**
+     * External images are never loaded; their alt text is kept as plain inline content.
+     */
+    private function removeImages(DocumentParsedEvent $event): void
+    {
+        $images = [];
+        foreach ($event->getDocument()->iterator() as $node) {
+            if ($node instanceof Image) {
+                $images[] = $node;
+            }
+        }
+
+        foreach ($images as $image) {
+            foreach ($image->children() as $altTextNode) {
+                $image->insertBefore($altTextNode);
+            }
+
+            $image->detach();
+        }
     }
 }

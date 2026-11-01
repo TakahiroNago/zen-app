@@ -30,7 +30,7 @@ class PersonalInfoDetector
     /**
      * @return list<string>
      */
-    public function detect(string $text): array
+    public function detect(#[\SensitiveParameter] string $text): array
     {
         $normalized = $this->normalize($text);
         $types = [];
@@ -47,7 +47,7 @@ class PersonalInfoDetector
     /**
      * Replaces detected personal information with placeholders, in the order of rules().
      */
-    public function redact(string $text): string
+    public function redact(#[\SensitiveParameter] string $text): string
     {
         $redacted = $this->normalize($text);
 
@@ -114,7 +114,7 @@ class PersonalInfoDetector
      * @param  array{regex: string, label: string, validator?: string}  $rule
      * @return list<array<int, string>>
      */
-    private function matchesOf(array $rule, string $text): array
+    private function matchesOf(array $rule, #[\SensitiveParameter] string $text): array
     {
         preg_match_all($rule['regex'], $text, $matches, PREG_SET_ORDER);
 
@@ -125,12 +125,12 @@ class PersonalInfoDetector
      * @param  array{regex: string, label: string, validator?: string}  $rule
      * @param  array<int, string>  $match
      */
-    private function isValid(array $rule, array $match): bool
+    private function isValid(array $rule, #[\SensitiveParameter] array $match): bool
     {
         return ! isset($rule['validator']) || $this->{$rule['validator']}($match);
     }
 
-    private function normalize(string $text): string
+    private function normalize(#[\SensitiveParameter] string $text): string
     {
         $normalized = mb_convert_kana($text, 'as', 'UTF-8');
 
@@ -140,7 +140,7 @@ class PersonalInfoDetector
     /**
      * @param  array<int, string>  $match
      */
-    private function isPhoneNumber(array $match): bool
+    private function isPhoneNumber(#[\SensitiveParameter] array $match): bool
     {
         $digits = preg_replace('/\D/', '', $match[0]);
         $digits = str_starts_with($match[0], '+81') ? '0'.substr($digits, 2) : $digits;
@@ -151,7 +151,7 @@ class PersonalInfoDetector
     /**
      * @param  array<int, string>  $match
      */
-    private function isCreditCard(array $match): bool
+    private function isCreditCard(#[\SensitiveParameter] array $match): bool
     {
         $digits = preg_replace('/\D/', '', $match[0]);
 
@@ -161,7 +161,7 @@ class PersonalInfoDetector
     /**
      * @param  array<int, string>  $match
      */
-    private function isPersonName(array $match): bool
+    private function isPersonName(#[\SensitiveParameter] array $match): bool
     {
         $name = $match[1];
 
@@ -169,7 +169,7 @@ class PersonalInfoDetector
             && ! in_array(mb_substr($name, -1), self::NAME_STOP_SUFFIXES, true);
     }
 
-    private function passesLuhn(string $digits): bool
+    private function passesLuhn(#[\SensitiveParameter] string $digits): bool
     {
         $sum = 0;
         $double = false;

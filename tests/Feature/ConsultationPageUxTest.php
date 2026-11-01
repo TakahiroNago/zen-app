@@ -41,7 +41,8 @@ test('the result page leads to another consultation and keeps the share url coll
             'data-share-link',
             '<details class="consultation-share-details">',
             '公開用URLを表示',
-            'value="'.$response->viewData('shareUrl').'"',
+            'value=""',
+            'data-share-endpoint="'.route('consultations.share-link', $response->viewData('consultationId')).'"',
             '</details>',
         ], false)
         ->assertSeeInOrder([

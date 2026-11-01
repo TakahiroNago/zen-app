@@ -23,8 +23,8 @@ test('the prune command deletes expired consultations containing personal inform
     config(['zen.consultation_retention_days' => 30]);
     $shareService = app(PublicConsultationShareService::class);
     $user = User::factory()->create();
-    $token = $shareService->create(['concern' => 'old', 'response' => 'old answer'], true);
-    $old = savedConsultation($user, ['share_token_hash' => $shareService->tokenHash($token), 'contains_personal_info' => true]);
+    $old = savedConsultation($user, ['contains_personal_info' => true]);
+    $token = $shareService->shareSavedConsultation($old);
     $old->forceFill(['created_at' => now()->subDays(31)])->saveQuietly();
     $oldWithoutPersonalInfo = savedConsultation($user, ['contains_personal_info' => false]);
     $oldWithoutPersonalInfo->forceFill(['created_at' => now()->subYears(3)])->saveQuietly();
@@ -52,12 +52,12 @@ test('a user can delete a consultation and its share link', function () {
     $user = User::factory()->create();
     $consultation = savedConsultation($user);
 
-    $page = $this->actingAs($user)
+    $this->actingAs($user)
         ->get(route('consultations.show', $consultation->id))
         ->assertOk()
         ->assertSee('onsubmit="return confirm(this.dataset.confirm)"', false)
         ->assertSee('data-confirm="この相談の記録を削除しますか？公開用URLも無効になります。"', false);
-    $shareUrl = $page->viewData('shareUrl');
+    $shareUrl = issueShareUrl($this, $consultation->id);
     $this->get($shareUrl)->assertOk();
 
     $this->actingAs($user)
@@ -109,15 +109,17 @@ test('re-opening a saved consultation hides a concern containing personal inform
     $user = User::factory()->create();
     $consultation = savedConsultation($user, ['concern' => '連絡先は boss@example.com']);
 
-    $page = $this->actingAs($user)->get(route('consultations.show', $consultation->id))->assertOk();
+    $this->actingAs($user)->get(route('consultations.show', $consultation->id))->assertOk();
 
-    $this->get($page->viewData('shareUrl'))
+    $this->get(issueShareUrl($this, $consultation->id))
         ->assertOk()
         ->assertDontSee('boss@example.com');
 });
 
 test('the shared page is not indexable and exposes no open graph metadata', function () {
-    $token = app(PublicConsultationShareService::class)->create(['concern' => '秘密の相談', 'response' => '回答']);
+    $token = app(PublicConsultationShareService::class)->shareSavedConsultation(
+        savedConsultation(User::factory()->create(), ['concern' => '秘密の相談', 'response' => '回答']),
+    );
 
     $this->get(route('consultations.share', ['token' => $token]))
         ->assertOk()

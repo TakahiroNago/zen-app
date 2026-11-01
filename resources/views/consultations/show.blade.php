@@ -22,7 +22,7 @@
                 <h2 class="section-label">{{ __('お答え') }}</h2>
                 <div class="consultation-copy">{!! app(App\Services\ConsultationResponseFormatter::class)->toHtml($consultation['response']) !!}</div>
             </section>
-            @include('partials.consultation-share', ['shareUrl' => $shareUrl])
+            @include('partials.consultation-share', ['consultationId' => $consultationId])
             <div class="history-actions">
                 <form method="POST" action="{{ route('consultations.destroy', $consultationId) }}" onsubmit="return confirm(this.dataset.confirm)" data-confirm="{{ __('この相談の記録を削除しますか？公開用URLも無効になります。') }}">
                     @csrf

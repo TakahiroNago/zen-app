@@ -48,3 +48,13 @@ function something()
 {
     // ..
 }
+
+/**
+ * Issues the public share URL of a consultation the way the share button does.
+ */
+function issueShareUrl(TestCase $test, int|string $consultationId): string
+{
+    return $test->postJson(route('consultations.share-link', (string) $consultationId))
+        ->assertOk()
+        ->json('url');
+}
