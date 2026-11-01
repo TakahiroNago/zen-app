@@ -51,14 +51,14 @@
                 data-submit-on-enter
                 data-character-count-target="concern-character-count"
                 required
-            >{{ old('concern') }}</textarea>
+            >{{ old('concern', $concernInput ?? '') }}</textarea>
             <p class="question-character-count" id="concern-character-count">
-                <span data-character-count>{{ mb_strlen((string) old('concern')) }}</span> / {{ App\Models\ZenConsultation::CONCERN_MAX_LENGTH }}
+                <span data-character-count>{{ mb_strlen((string) old('concern', $concernInput ?? '')) }}</span> / {{ App\Models\ZenConsultation::CONCERN_MAX_LENGTH }}
             </p>
             @error('concern')
                 <p class="form-error" role="alert">{{ $message }}</p>
             @enderror
-            @if (session('personal_info_detected') || old('confirm_personal_info'))
+            @if (($personalInfoDetected ?? false) || old('confirm_personal_info'))
                 <label class="form-notice">
                     <input type="checkbox" name="confirm_personal_info" value="1" @checked(old('confirm_personal_info'))>
                     {{ __('個人情報が含まれていることを理解したうえで、このまま送信する（共有URLでは相談文が非表示になります）') }}
@@ -70,12 +70,12 @@
                 <span class="action-arrow" aria-hidden="true">→</span>
             </button>
         </form>
-        @if (session('anonymized_concern'))
+        @if ($anonymizedConcern ?? null)
             <form class="question-form" method="POST" action="{{ route('zen.respond') }}">
                 @csrf
                 <p class="form-notice">{{ __('個人情報と思われる部分を伏せた内容で相談できます。内容をご確認ください。') }}</p>
-                <p class="question-quote">{{ session('anonymized_concern') }}</p>
-                <input type="hidden" name="concern" value="{{ session('anonymized_concern') }}">
+                <p class="question-quote">{{ $anonymizedConcern }}</p>
+                <input type="hidden" name="concern" value="{{ $anonymizedConcern }}">
                 <button class="primary-action" type="submit" data-submitting-label="{{ __('読み解いています...') }}">
                     <span class="loading-spinner" aria-hidden="true"></span>
                     <span class="submit-label">{{ __('この内容で相談する') }}</span>

@@ -5,9 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\ZenConsultation;
 use App\Services\ConsultationDeletionService;
-use App\Services\PersonalInfoDetector;
 use App\Services\PublicConsultationShareService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -104,12 +104,8 @@ class ConsultationHistoryController extends Controller
         ));
     }
 
-    public function show(
-        Request $request,
-        string $consultation,
-        PublicConsultationShareService $shareService,
-        PersonalInfoDetector $personalInfoDetector,
-    ): View|RedirectResponse {
+    public function show(Request $request, string $consultation): View|RedirectResponse
+    {
         if (preg_match('/^session-(\d+)$/', $consultation, $matches) === 1) {
             $sessionConsultation = $request->session()->get('zen_consultations.'.$matches[1]);
             abort_unless($this->isConsultation($sessionConsultation), 404);
@@ -130,52 +126,48 @@ class ConsultationHistoryController extends Controller
                 return redirect()->route('verification.notice');
             }
 
-            $consultations = $user->zenConsultations();
-            if ($user->plan !== User::PLAN_PREMIUM) {
-                $consultations->where('created_at', '>=', now()->subMonths(3));
-            }
-
-            $savedConsultation = $consultations->findOrFail($consultation);
-            if ($user->plan === User::PLAN_FREE) {
-                $newerConsultations = $user->zenConsultations()
-                    ->where(function ($query) use ($savedConsultation): void {
-                        $query->where('created_at', '>', $savedConsultation->created_at)
-                            ->orWhere(function ($query) use ($savedConsultation): void {
-                                $query->where('created_at', $savedConsultation->created_at)
-                                    ->where('id', '>', $savedConsultation->id);
-                            });
-                    })
-                    ->count();
-
-                abort_if($newerConsultations >= 50, 404);
-            }
-
-            $consultationData = $savedConsultation->only(['concern', 'response', 'image_number', 'created_at']);
-        }
-
-        $shareToken = $shareService->create(
-            $consultationData,
-            $personalInfoDetector->detect($consultationData['concern']) !== [],
-        );
-        if (isset($savedConsultation)) {
-            $shareService->revoke($savedConsultation->share_token_hash);
-            $savedConsultation->forceFill(['share_token_hash' => $shareService->tokenHash($shareToken)])->saveQuietly();
+            $consultationData = $this->visibleSavedConsultation($user, $consultation)
+                ->only(['concern', 'response', 'image_number', 'created_at']);
         }
 
         return view('consultations.show', [
             'consultation' => $consultationData,
             'consultationId' => $consultation,
-            'shareUrl' => route('consultations.share', ['token' => $shareToken]),
         ]);
+    }
+
+    /**
+     * Issues (or returns the still active) public share URL when the owner explicitly asks to share.
+     */
+    public function share(Request $request, string $consultation, PublicConsultationShareService $shareService): JsonResponse
+    {
+        if (preg_match('/^session-(\d+)$/', $consultation, $matches) === 1) {
+            $sessionKey = 'zen_consultations.'.$matches[1];
+            $sessionConsultation = $request->session()->get($sessionKey);
+            abort_unless($this->isConsultation($sessionConsultation), 404);
+
+            $sharedConsultation = $shareService->shareSessionConsultation($sessionConsultation);
+            $request->session()->put($sessionKey, $sharedConsultation);
+            $token = $sharedConsultation['share_token'];
+        } else {
+            $user = $request->user();
+            abort_unless($user instanceof User && $user->hasVerifiedEmail(), 403);
+
+            $token = $shareService->shareSavedConsultation($this->visibleSavedConsultation($user, $consultation));
+        }
+
+        return response()->json(['url' => route('consultations.share', ['token' => $token])])
+            ->header('Cache-Control', 'private, no-store');
     }
 
     public function destroy(
         Request $request,
         string $consultation,
         ConsultationDeletionService $deletionService,
+        PublicConsultationShareService $shareService,
     ): RedirectResponse {
         if (preg_match('/^session-(\d+)$/', $consultation, $matches) === 1) {
-            $request->session()->forget('zen_consultations.'.$matches[1]);
+            $this->revokeSessionShare($request->session()->pull('zen_consultations.'.$matches[1]), $shareService);
         } else {
             $user = $request->user();
             abort_unless($user instanceof User, 403);
@@ -186,9 +178,15 @@ class ConsultationHistoryController extends Controller
         return redirect()->route('consultations.index')->with('status', __('相談の記録を削除しました。'));
     }
 
-    public function destroyAll(Request $request, ConsultationDeletionService $deletionService): RedirectResponse
-    {
-        $request->session()->forget('zen_consultations');
+    public function destroyAll(
+        Request $request,
+        ConsultationDeletionService $deletionService,
+        PublicConsultationShareService $shareService,
+    ): RedirectResponse {
+        $sessionConsultations = $request->session()->pull('zen_consultations', []);
+        foreach (is_array($sessionConsultations) ? $sessionConsultations : [] as $sessionConsultation) {
+            $this->revokeSessionShare($sessionConsultation, $shareService);
+        }
 
         $user = $request->user();
         if ($user instanceof User) {
@@ -196,6 +194,41 @@ class ConsultationHistoryController extends Controller
         }
 
         return redirect()->route('consultations.index')->with('status', __('すべての相談の記録を削除しました。'));
+    }
+
+    /**
+     * Finds a saved consultation within the history the user's plan can currently see.
+     */
+    private function visibleSavedConsultation(User $user, string $consultation): ZenConsultation
+    {
+        $consultations = $user->zenConsultations();
+        if ($user->plan !== User::PLAN_PREMIUM) {
+            $consultations->where('created_at', '>=', now()->subMonths(3));
+        }
+
+        $savedConsultation = $consultations->findOrFail($consultation);
+        if ($user->plan === User::PLAN_FREE) {
+            $newerConsultations = $user->zenConsultations()
+                ->where(function ($query) use ($savedConsultation): void {
+                    $query->where('created_at', '>', $savedConsultation->created_at)
+                        ->orWhere(function ($query) use ($savedConsultation): void {
+                            $query->where('created_at', $savedConsultation->created_at)
+                                ->where('id', '>', $savedConsultation->id);
+                        });
+                })
+                ->count();
+
+            abort_if($newerConsultations >= 50, 404);
+        }
+
+        return $savedConsultation;
+    }
+
+    private function revokeSessionShare(mixed $sessionConsultation, PublicConsultationShareService $shareService): void
+    {
+        if (is_array($sessionConsultation) && is_string($sessionConsultation['share_token'] ?? null)) {
+            $shareService->revoke($shareService->tokenHash($sessionConsultation['share_token']));
+        }
     }
 
     /** @return Collection<int, array{id: string, concern: string, response: string}> */

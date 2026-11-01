@@ -74,6 +74,7 @@ Route::prefix('{locale}')
             Route::delete('/billing/plan', [BillingController::class, 'cancelPlanChange'])->middleware(['auth', 'verified'])->name('billing.plan.cancel');
             Route::get('/consultations', [ConsultationHistoryController::class, 'index'])->name('consultations.index');
             Route::get('/consultations/{consultation}', [ConsultationHistoryController::class, 'show'])->name('consultations.show');
+            Route::post('/consultations/{consultation}/share', [ConsultationHistoryController::class, 'share'])->middleware('throttle:30,1')->block(lockSeconds: 10, waitSeconds: 5)->name('consultations.share-link');
             Route::delete('/consultations', [ConsultationHistoryController::class, 'destroyAll'])->name('consultations.destroy-all');
             Route::delete('/consultations/{consultation}', [ConsultationHistoryController::class, 'destroy'])->name('consultations.destroy');
         });

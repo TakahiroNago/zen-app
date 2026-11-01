@@ -23,7 +23,7 @@
                 <div class="consultation-copy">{!! app(App\Services\ConsultationResponseFormatter::class)->toHtml($response) !!}</div>
             </section>
 
-            @include('partials.consultation-share', ['shareUrl' => $shareUrl])
+            @include('partials.consultation-share', ['consultationId' => $consultationId])
 
             @if ($creditsRemaining === null)
                 <p class="credit-summary">{{ __('相談回数は無制限です') }}</p>

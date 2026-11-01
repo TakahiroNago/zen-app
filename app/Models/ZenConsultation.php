@@ -3,10 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'concern', 'response', 'topic', 'summary', 'daily_consultation_date', 'share_token_hash', 'contains_personal_info', 'image_number'])]
+#[Fillable(['user_id', 'concern', 'response', 'topic', 'summary', 'daily_consultation_date', 'share_token_hash', 'share_token', 'share_expires_at', 'contains_personal_info', 'image_number'])]
+#[Hidden(['share_token', 'share_token_hash'])]
 class ZenConsultation extends Model
 {
     public const TOPICS = ['仕事', '恋愛', 'お金', '家族', '人間関係', '健康', '将来', '自分自身', '芸術', 'その他'];
@@ -34,6 +36,8 @@ class ZenConsultation extends Model
             'daily_consultation_date' => 'date',
             'contains_personal_info' => 'boolean',
             'image_number' => 'integer',
+            'share_token' => 'encrypted',
+            'share_expires_at' => 'datetime',
         ];
     }
 

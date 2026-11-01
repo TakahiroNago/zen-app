@@ -5,11 +5,14 @@ namespace App\Services;
 use App\Models\User;
 use App\Models\ZenConsultation;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use UnexpectedValueException;
 
 class SessionConsultationPersister
 {
+    public function __construct(private readonly PublicConsultationShareService $shareService) {}
+
     public function persist(User $user, Request $request): void
     {
         $sessionConsultations = $request->session()->get('zen_consultations', []);
@@ -57,12 +60,26 @@ class SessionConsultationPersister
                 $persistedConsultation['topic'] = $consultation['topic'];
                 $persistedConsultation['summary'] = $consultation['summary'];
             }
+            if (
+                is_string($consultation['share_token'] ?? null)
+                && is_int($consultation['share_expires_at'] ?? null)
+                && $consultation['share_expires_at'] > now()->getTimestamp()
+            ) {
+                $persistedConsultation['share_token'] = $consultation['share_token'];
+                $persistedConsultation['share_token_hash'] = $this->shareService->tokenHash($consultation['share_token']);
+                $persistedConsultation['share_expires_at'] = Carbon::createFromTimestamp($consultation['share_expires_at']);
+            }
 
             $consultations[] = $persistedConsultation;
         }
 
         if ($consultations !== []) {
             DB::transaction(fn () => $user->zenConsultations()->createMany($consultations));
+        }
+
+        // Shared links of persisted guest consultations are now served from the saved rows.
+        foreach ($consultations as $consultation) {
+            $this->shareService->revoke($consultation['share_token_hash'] ?? null);
         }
 
         $request->session()->forget('zen_consultations');

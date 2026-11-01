@@ -7,14 +7,16 @@ use App\Models\ZenConsultation;
 use App\Services\ConsultationCreditService;
 use App\Services\GuestTrialCreditService;
 use App\Services\PersonalInfoDetector;
-use App\Services\PublicConsultationShareService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\MessageBag;
+use Illuminate\Support\ViewErrorBag;
 use OpenAI\Laravel\Facades\OpenAI;
 use Throwable;
 use UnexpectedValueException;
@@ -32,24 +34,15 @@ class ZenController extends Controller
         ConsultationCreditService $creditService,
         GuestTrialCreditService $guestTrialCreditService,
     ): View {
-        $user = $request->user();
-        $creditSummary = $user instanceof User ? $creditService->balance($user) : null;
-        $guestCredits = null;
-        if ($user === null) {
-            $deviceToken = $this->guestDeviceToken($request);
-            $guestCredits = $guestTrialCreditService->remaining($deviceToken);
-        }
-
-        return view('zen', compact('creditSummary', 'guestCredits'));
+        return view('zen', $this->consultationFormData($request, $creditService, $guestTrialCreditService));
     }
 
     public function respond(
         Request $request,
         ConsultationCreditService $creditService,
         GuestTrialCreditService $guestTrialCreditService,
-        PublicConsultationShareService $shareService,
         PersonalInfoDetector $personalInfoDetector,
-    ): View|RedirectResponse {
+    ): View|RedirectResponse|Response {
         $validated = $request->validate([
             'concern' => [
                 'required',
@@ -63,13 +56,16 @@ class ZenController extends Controller
         if ($containsPersonalInfo && ! $request->boolean('confirm_personal_info')) {
             $anonymizedConcern = $personalInfoDetector->redact($concern);
 
-            return redirect()->route('zen')
-                ->withInput()
-                ->with('personal_info_detected', true)
-                ->with('anonymized_concern', $personalInfoDetector->detect($anonymizedConcern) === [] && mb_strlen($anonymizedConcern) <= ZenConsultation::CONCERN_MAX_LENGTH ? $anonymizedConcern : null)
-                ->withErrors([
+            // Rendered directly instead of redirecting so the concern is never flashed into the session.
+            return response()->view('zen', [
+                ...$this->consultationFormData($request, $creditService, $guestTrialCreditService),
+                'concernInput' => $concern,
+                'personalInfoDetected' => true,
+                'anonymizedConcern' => $personalInfoDetector->detect($anonymizedConcern) === [] && mb_strlen($anonymizedConcern) <= ZenConsultation::CONCERN_MAX_LENGTH ? $anonymizedConcern : null,
+                'errors' => (new ViewErrorBag)->put('default', new MessageBag([
                     'concern' => __('メールアドレス・電話番号・住所などの個人情報と思われる内容が含まれています。削除してから送信してください。このまま送信する場合は、下のチェックを入れてください。'),
-                ]);
+                ])),
+            ], 422);
         }
         $user = $request->user();
         $guestDeviceToken = $user instanceof User ? null : $this->guestDeviceToken($request);
@@ -93,7 +89,6 @@ class ZenController extends Controller
                 $guestDeviceToken,
                 $creditService,
                 $guestTrialCreditService,
-                $shareService,
                 $containsPersonalInfo,
             );
         } finally {
@@ -103,12 +98,11 @@ class ZenController extends Controller
 
     private function respondWithLock(
         Request $request,
-        string $concern,
+        #[\SensitiveParameter] string $concern,
         ?User $user,
         ?string $guestDeviceToken,
         ConsultationCreditService $creditService,
         GuestTrialCreditService $guestTrialCreditService,
-        PublicConsultationShareService $shareService,
         bool $containsPersonalInfo,
     ): View|RedirectResponse {
         $creditBucket = null;
@@ -208,21 +202,19 @@ class ZenController extends Controller
                 'image_number' => random_int(1, ZenConsultation::IMAGE_COUNT),
                 ...$metadata,
             ];
-            $shareToken = $shareService->create($consultation, $containsPersonalInfo);
-
             if ($user instanceof User) {
                 $creditSummary = $creditService->balance($user);
                 $creditsRemaining = $creditSummary['total'];
-                $user->zenConsultations()->create([
+                $consultationId = (string) $user->zenConsultations()->create([
                     ...$consultation,
-                    'share_token_hash' => $shareService->tokenHash($shareToken),
                     'contains_personal_info' => $containsPersonalInfo,
-                ]);
+                ])->getKey();
             } else {
                 $creditsRemaining = $guestTrialCreditService->remaining($guestDeviceToken);
                 $sessionConsultations = $request->session()->get('zen_consultations', []);
                 $sessionConsultations[] = $consultation;
                 $request->session()->put('zen_consultations', $sessionConsultations);
+                $consultationId = 'session-'.array_key_last($sessionConsultations);
             }
         } catch (Throwable $exception) {
             if ($user instanceof User && $creditBucket !== null) {
@@ -236,13 +228,13 @@ class ZenController extends Controller
 
         return view('zen-result', [
             ...$consultation,
-            'shareUrl' => route('consultations.share', ['token' => $shareToken]),
+            'consultationId' => $consultationId,
             'creditsRemaining' => $creditsRemaining,
             'isGuest' => ! $user instanceof User,
         ]);
     }
 
-    private function consultationTopic(string $concern): string
+    private function consultationTopic(#[\SensitiveParameter] string $concern): string
     {
         $response = OpenAI::chat()->create([
             'model' => 'gpt-5.6-luna',
@@ -269,7 +261,7 @@ class ZenController extends Controller
     /**
      * @param  Collection<int, ZenConsultation>  $history
      */
-    private function premiumConsultationPrompt(string $concern, Collection $history): string
+    private function premiumConsultationPrompt(#[\SensitiveParameter] string $concern, Collection $history): string
     {
         $locale = app()->isLocale('ja') ? 'ja' : 'en';
 
@@ -305,12 +297,12 @@ class ZenController extends Controller
     /**
      * @param  array<string, string>  $replacements
      */
-    private function formatZenPrompt(string $name, array $replacements): string
+    private function formatZenPrompt(string $name, #[\SensitiveParameter] array $replacements): string
     {
         return strtr($this->zenPrompt($name), $replacements);
     }
 
-    private function consultationSummary(string $concern, string $answer): string
+    private function consultationSummary(#[\SensitiveParameter] string $concern, #[\SensitiveParameter] string $answer): string
     {
         $response = OpenAI::chat()->create([
             'model' => 'gpt-5.6-luna',
@@ -351,7 +343,7 @@ class ZenController extends Controller
     /**
      * @return array{topic: string, summary: string}
      */
-    private function consultationMetadata(string $concern, string $answer): array
+    private function consultationMetadata(#[\SensitiveParameter] string $concern, #[\SensitiveParameter] string $answer): array
     {
         $response = OpenAI::chat()->create([
             'model' => 'gpt-5.6-luna',
@@ -398,7 +390,7 @@ class ZenController extends Controller
         ];
     }
 
-    private function consultationTopicPrompt(string $prompt): string
+    private function consultationTopicPrompt(#[\SensitiveParameter] string $prompt): string
     {
         $updatedPrompt = preg_replace(
             '/(?:「[^」]+」){2,}/u',
@@ -413,6 +405,24 @@ class ZenController extends Controller
         }
 
         return $updatedPrompt;
+    }
+
+    /**
+     * @return array{creditSummary: array<string, mixed>|null, guestCredits: int|null}
+     */
+    private function consultationFormData(
+        Request $request,
+        ConsultationCreditService $creditService,
+        GuestTrialCreditService $guestTrialCreditService,
+    ): array {
+        $user = $request->user();
+        $creditSummary = $user instanceof User ? $creditService->balance($user) : null;
+        $guestCredits = null;
+        if ($user === null) {
+            $guestCredits = $guestTrialCreditService->remaining($this->guestDeviceToken($request));
+        }
+
+        return compact('creditSummary', 'guestCredits');
     }
 
     private function guestDeviceToken(Request $request): string

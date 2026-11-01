@@ -40,9 +40,13 @@ test('authenticated consultations are stored with their topic and summary', func
         ->assertSee('<strong>One step at a time.</strong>', false)
         ->assertDontSee("<script>alert('unsafe')</script>", false)
         ->assertDontSee('card-number')
-        ->assertViewHas('shareUrl');
+        ->assertViewMissing('shareUrl');
 
-    $shareUrl = $response->viewData('shareUrl');
+    $reading = $user->zenConsultations()->sole();
+    expect($reading->share_token_hash)->toBeNull()
+        ->and($response->viewData('consultationId'))->toBe((string) $reading->id);
+
+    $shareUrl = issueShareUrl($this, $response->viewData('consultationId'));
     $sharePath = parse_url($shareUrl, PHP_URL_PATH);
     expect($sharePath)->toMatch('/\/shared-consultations\/[a-f0-9]{64}$/')
         ->and(explode('/', $sharePath))->not->toContain((string) $user->id);
@@ -60,22 +64,22 @@ test('authenticated consultations are stored with their topic and summary', func
     $this->get(route('consultations.share', ['token' => str_repeat('0', 64)]))
         ->assertNotFound();
 
-    $reading = $user->zenConsultations()->sole();
-
-    $historyResponse = $this->get(route('consultations.show', $reading->id))
+    $this->get(route('consultations.show', $reading->id))
         ->assertOk()
         ->assertSee('<h3>A useful interpretation</h3>', false)
         ->assertSee('<strong>One step at a time.</strong>', false)
         ->assertDontSee("<script>alert('unsafe')</script>", false)
         ->assertSee('ことばをシェア')
-        ->assertViewHas('shareUrl');
+        ->assertViewMissing('shareUrl');
 
-    $this->get($historyResponse->viewData('shareUrl'))
+    expect(issueShareUrl($this, $reading->id))->toBe($shareUrl);
+    $this->get($shareUrl)
         ->assertOk()
         ->assertSee('What should I focus on?')
         ->assertSee('<h3>A useful interpretation</h3>', false)
         ->assertDontSee($user->email);
 
+    $reading->refresh();
     expect($reading->concern)->toBe('What should I focus on?')
         ->and($reading->response)->toBe("### A useful interpretation\n\n**One step at a time.**\n\n<script>alert('unsafe')</script>")
         ->and($reading->topic)->toBe('仕事')
@@ -97,7 +101,7 @@ test('authenticated consultations are stored with their topic and summary', func
     });
 
     expect(Schema::getColumnListing('zen_consultations'))
-        ->toEqualCanonicalizing(['id', 'user_id', 'concern', 'response', 'topic', 'summary', 'daily_consultation_date', 'share_token_hash', 'contains_personal_info', 'image_number', 'created_at', 'updated_at']);
+        ->toEqualCanonicalizing(['id', 'user_id', 'concern', 'response', 'topic', 'summary', 'daily_consultation_date', 'share_token_hash', 'share_token', 'share_expires_at', 'contains_personal_info', 'image_number', 'created_at', 'updated_at']);
 });
 
 test('English consultations use English prompts and store an English summary', function () {
@@ -263,7 +267,8 @@ test('guest consultations stay in the same session and are not written to the da
         ->assertDontSee('data-copy-consultation-url');
     $this->post(route('zen.respond'), ['concern' => 'Second question?'])->assertOk();
 
-    $shareUrl = $firstResponse->viewData('shareUrl');
+    expect($firstResponse->viewData('consultationId'))->toBe('session-0');
+    $shareUrl = issueShareUrl($this, 'session-0');
     expect(parse_url($shareUrl, PHP_URL_PATH))->toMatch('/\/shared-consultations\/[a-f0-9]{64}$/');
 
     $this->get($shareUrl)
@@ -273,14 +278,15 @@ test('guest consultations stay in the same session and are not written to the da
         ->assertDontSee('card-number')
         ->assertDontSee('account-profile-email');
 
-    $sessionHistoryResponse = $this->get(route('consultations.show', 'session-0'))
+    $this->get(route('consultations.show', 'session-0'))
         ->assertOk()
         ->assertSee('禅師からのことば')
         ->assertSee('First interpretation.')
         ->assertDontSee('card-number')
-        ->assertViewHas('shareUrl');
+        ->assertViewMissing('shareUrl');
 
-    $this->get($sessionHistoryResponse->viewData('shareUrl'))
+    expect(issueShareUrl($this, 'session-0'))->toBe($shareUrl);
+    $this->get($shareUrl)
         ->assertOk()
         ->assertSee('First question?')
         ->assertSee('First interpretation.');
