@@ -868,6 +868,11 @@ h2 {
 }
 
 .question-form.is-submitting .submit-label {
+    margin-left: 0.6em;
+}
+
+/* Only the animated dots are enlarged; text labels keep the button's font size. */
+.question-form.is-submitting button:not([data-submitting-label]) .submit-label {
     display: inline-block;
     min-width: 2.2em;
     margin-left: 0.8em;
