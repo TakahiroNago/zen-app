@@ -234,7 +234,8 @@ test('the result page links the entire exhausted member-credit notice to plans',
         ->post(route('zen.respond'), ['concern' => 'Last question?'])
         ->assertOk()
         ->assertSee('class="credit-panel-primary" href="'.route('plans').'"', false)
-        ->assertSee('本日の無料相談はここまでです');
+        ->assertSee('本日の無料相談はここまでです')
+        ->assertDontSee('もう一度相談する');
 });
 
 test('lite members receive ten daily credits up to a fifty-credit carryover cap', function () {

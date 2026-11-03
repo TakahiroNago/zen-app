@@ -1,36 +1,53 @@
+{{-- Copy / share actions for a consultation. Expects $consultationId; $showSavedLink is optional. --}}
 <section class="consultation-share" aria-labelledby="consultation-share-heading">
-    <h2 class="section-label" id="consultation-share-heading">{{ __('ことばをシェア') }}</h2>
+    <h2 class="sr-only" id="consultation-share-heading">{{ __('ことばをシェア') }}</h2>
 
     <div class="consultation-share-actions">
-        <button class="consultation-share-button" type="button" data-share-link aria-label="{{ __('リンクでシェア') }}">{{ __('シェア') }}</button>
+        <button
+            class="secondary-action"
+            type="button"
+            data-copy-response="#consultation-copy"
+            data-copy-success="{{ __('ことばをコピーしました。') }}"
+            data-copy-error="{{ __('コピーできませんでした。本文を選択してコピーしてください。') }}"
+        >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+            <span class="action-label-full">{{ __('ことばをコピー') }}</span><span class="action-label-short">{{ __('コピー') }}</span>
+        </button>
+        <button class="secondary-action consultation-share-button" type="button" data-share-link>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
+            <span class="action-label-full">{{ __('シェア・リンクをコピー') }}</span><span class="action-label-short">{{ __('シェア') }}</span>
+        </button>
+        @if ($showSavedLink ?? false)
+            <a class="secondary-action" href="{{ route('consultations.index') }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
+                {{ __('記録に保存済み') }}
+            </a>
+        @endif
     </div>
-    <details class="consultation-share-details">
-        <summary>{{ __('公開用URLを表示') }}</summary>
-        <p class="consultation-share-note">{{ __('公開用URLにはメールアドレスやユーザーIDは含まれません。URLを知っている人は結果を閲覧できます（有効期限30日）。') }}</p>
-        <div class="consultation-share-url">
-            <input
-                class="consultation-share-url-input"
-                id="consultation-share-url"
-                type="url"
-                value=""
-                data-share-endpoint="{{ route('consultations.share-link', $consultationId) }}"
-                readonly
-                aria-label="{{ __('公開用相談URL') }}"
-            >
-        </div>
-    </details>
+    <p class="consultation-share-note">{{ __('公開用URLにはメールアドレスやユーザーIDは含まれません。URLを知っている人は結果を閲覧できます（有効期限30日）。') }}</p>
+    <div class="consultation-share-url" data-share-url-panel hidden>
+        <input
+            class="consultation-share-url-input"
+            id="consultation-share-url"
+            type="url"
+            value=""
+            data-share-endpoint="{{ route('consultations.share-link', $consultationId) }}"
+            readonly
+            aria-label="{{ __('公開用相談URL') }}"
+        >
+    </div>
 </section>
 
 @push('page_end')
     <script>
         const shareUrlInput = document.querySelector('#consultation-share-url');
-        const shareDetails = shareUrlInput.closest('details');
+        const shareUrlPanel = shareUrlInput.closest('[data-share-url-panel]');
         const shareButton = document.querySelector('[data-share-link]');
         const showShareStatus = (message, isError = false) => window.showToast(message, isError);
         let shareUrlRequest = null;
         let isSharing = false;
 
-        // The public URL is issued only when the user explicitly opens or uses the share controls.
+        // The public URL is issued only when the user explicitly uses the share controls.
         function ensureShareUrl() {
             if (shareUrlInput.value) {
                 return Promise.resolve(shareUrlInput.value);
@@ -66,8 +83,9 @@
             showShareStatus(@json(__('公開用URLを作成できませんでした。時間をおいて再度お試しください。')), true);
         }
 
+        // Reveals the issued URL so it can be copied by hand when the clipboard is unavailable.
         function selectShareUrl() {
-            shareDetails?.setAttribute('open', '');
+            shareUrlPanel.hidden = false;
             shareUrlInput.focus();
             shareUrlInput.select();
         }
@@ -116,12 +134,6 @@
             return document.execCommand('copy');
         }
 
-        shareDetails?.addEventListener('toggle', () => {
-            if (shareDetails.open) {
-                ensureShareUrl().catch(showShareUrlError);
-            }
-        });
-
         shareUrlInput.addEventListener('click', async () => {
             try {
                 showShareStatus(await copyShareUrl()
@@ -147,7 +159,7 @@
             } catch (error) {
                 if (error instanceof DOMException && error.name === 'NotAllowedError') {
                     selectShareUrl();
-                    showShareStatus(@json(__('公開用URLを作成しました。もう一度「シェア」を押してください。')));
+                    showShareStatus(@json(__('公開用URLを作成しました。もう一度「シェア・リンクをコピー」を押してください。')));
                     return;
                 }
 
@@ -180,6 +192,7 @@
                     return;
                 }
 
+                selectShareUrl();
                 showShareStatus(@json(__('共有できませんでした。上記URLを手動でコピーしてください。')), true);
             } finally {
                 isSharing = false;

@@ -47,7 +47,7 @@ test('concerns longer than the shared maximum length are rejected', function () 
         ->assertSessionHasErrors('concern');
 });
 
-test('the result page leads to another consultation and keeps the share url collapsed', function () {
+test('the result page offers copy and share actions and leads to another consultation', function () {
     OpenAI::fake([
         CreateResponse::fake(['choices' => [['message' => ['content' => '静かな答えです。']]]]),
         CreateResponse::fake(['choices' => [['message' => ['content' => '{"topic":"仕事","summary":"要約です。"}']]]]),
@@ -59,29 +59,31 @@ test('the result page leads to another consultation and keeps the share url coll
 
     $response
         ->assertSeeInOrder([
+            'data-copy-response="#consultation-copy"',
             'data-share-link',
-            '<details class="consultation-share-details">',
-            '公開用URLを表示',
+            '記録に保存済み',
+            'data-share-url-panel hidden',
             'value=""',
             'data-share-endpoint="'.route('consultations.share-link', $response->viewData('consultationId')).'"',
-            '</details>',
         ], false)
+        ->assertSee('id="consultation-copy"', false)
         ->assertSeeInOrder([
             '<div class="result-actions">',
-            '<a class="primary-action" href="'.route('zen').'">',
+            '<a class="primary-action" href="'.route('home').'">',
             '<a class="text-link" href="'.route('consultations.index').'">相談の記録を見る</a>',
         ], false);
 });
 
-test('the saved consultation page uses the same collapsible share section', function () {
+test('the saved consultation page uses the same share actions', function () {
     $user = User::factory()->create();
     $consultation = $user->zenConsultations()->create(['concern' => '家族のこと', 'response' => '回答です。']);
 
     $this->actingAs($user)
         ->get(route('consultations.show', $consultation->id))
         ->assertOk()
-        ->assertSee('<details class="consultation-share-details">', false)
+        ->assertSee('data-share-url-panel hidden', false)
         ->assertSee('data-share-link', false)
+        ->assertSee('data-copy-response="#consultation-copy"', false)
         ->assertSee("const shareUrlInput = document.querySelector('#consultation-share-url');", false);
 });
 
@@ -94,6 +96,6 @@ test('the result page does not lead with another consultation once credits are e
     $this->actingAs(User::factory()->create())
         ->post(route('zen.respond'), ['concern' => '仕事に迷っています'])
         ->assertOk()
-        ->assertSee('<a class="text-link" href="'.route('zen').'">もう一度相談する</a>', false)
-        ->assertDontSee('<a class="primary-action" href="'.route('zen').'">', false);
+        ->assertSee('class="credit-panel"', false)
+        ->assertDontSee('もう一度相談する');
 });

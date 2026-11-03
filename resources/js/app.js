@@ -88,6 +88,24 @@ document.querySelectorAll('button[data-requires-input]').forEach((submitButton) 
 	updateDisabledState();
 });
 
+document.querySelectorAll('[data-copy-response]').forEach((copyButton) => {
+	copyButton.addEventListener('click', async () => {
+		const source = document.querySelector(copyButton.dataset.copyResponse);
+		const text = source?.innerText.trim() ?? '';
+
+		try {
+			if (!text || !window.isSecureContext || !navigator.clipboard) {
+				throw new Error('clipboard-unavailable');
+			}
+
+			await navigator.clipboard.writeText(text);
+			window.showToast(copyButton.dataset.copySuccess);
+		} catch {
+			window.showToast(copyButton.dataset.copyError, true);
+		}
+	});
+});
+
 historyTopicFilter?.addEventListener('change', () => {
 	historyTopicFilter.form?.requestSubmit();
 });
