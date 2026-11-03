@@ -8,15 +8,22 @@ test('public information pages are available and link to all notices in the foot
         'legal.commercial-transactions' => '特定商取引法に基づく表示',
         'legal.refund-credit-policy' => '返金・クレジットポリシー',
     ];
+    $footerLabels = [
+        'about' => '心の庵について',
+        'legal.terms' => '利用規約',
+        'legal.privacy' => 'プライバシー',
+        'legal.commercial-transactions' => '特定商取引法表記',
+        'legal.refund-credit-policy' => '返金ポリシー',
+    ];
 
     foreach ($routes as $route => $title) {
         $response = $this->get(route($route));
 
         $response->assertOk()
-            ->assertSee($title)
+            ->assertSee('<h1>'.$title.'</h1>', false)
             ->assertSee('class="site-footer-links"', false);
 
-        foreach ($routes as $footerRoute => $footerTitle) {
+        foreach ($footerLabels as $footerRoute => $footerTitle) {
             $response->assertSee(route($footerRoute))
                 ->assertSee($footerTitle);
         }

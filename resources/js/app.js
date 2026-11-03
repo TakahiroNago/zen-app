@@ -55,6 +55,57 @@ document.querySelectorAll('[data-character-count-target]').forEach((input) => {
 	updateCount();
 });
 
+// Hint chips only fill an empty field so they never overwrite what the user has written.
+document.querySelectorAll('[data-concern-hint]').forEach((hintButton) => {
+	hintButton.addEventListener('click', () => {
+		const concernInput = hintButton.form?.querySelector('[data-concern-input]');
+		if (!concernInput) {
+			return;
+		}
+
+		if (concernInput.value.trim() === '') {
+			concernInput.value = hintButton.dataset.concernHint;
+			concernInput.dispatchEvent(new Event('input', { bubbles: true }));
+		}
+
+		concernInput.focus();
+	});
+});
+
+document.querySelectorAll('button[data-requires-input]').forEach((submitButton) => {
+	const concernInput = submitButton.form?.querySelector('[data-concern-input]');
+	if (!concernInput) {
+		return;
+	}
+
+	const updateDisabledState = () => {
+		if (!submitButton.form.classList.contains('is-submitting')) {
+			submitButton.disabled = concernInput.value.trim() === '';
+		}
+	};
+
+	concernInput.addEventListener('input', updateDisabledState);
+	updateDisabledState();
+});
+
+document.querySelectorAll('[data-copy-response]').forEach((copyButton) => {
+	copyButton.addEventListener('click', async () => {
+		const source = document.querySelector(copyButton.dataset.copyResponse);
+		const text = source?.innerText.trim() ?? '';
+
+		try {
+			if (!text || !window.isSecureContext || !navigator.clipboard) {
+				throw new Error('clipboard-unavailable');
+			}
+
+			await navigator.clipboard.writeText(text);
+			window.showToast(copyButton.dataset.copySuccess);
+		} catch {
+			window.showToast(copyButton.dataset.copyError, true);
+		}
+	});
+});
+
 historyTopicFilter?.addEventListener('change', () => {
 	historyTopicFilter.form?.requestSubmit();
 });
@@ -69,6 +120,16 @@ document.querySelectorAll('[data-local-time]').forEach((timeElement) => {
 	const pad = (value) => String(value).padStart(2, '0');
 
 	timeElement.textContent = `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+});
+
+document.querySelectorAll('[data-local-date]').forEach((timeElement) => {
+	const date = new Date(timeElement.dateTime);
+
+	if (Number.isNaN(date.getTime())) {
+		return;
+	}
+
+	timeElement.textContent = new Intl.DateTimeFormat(document.documentElement.lang || undefined, { dateStyle: 'long' }).format(date);
 });
 
 if (accountMenu && accountPopover && accountMenuTrigger) {
@@ -388,10 +449,18 @@ const showSubmittingState = (form) => {
 	const submitButton = form.querySelector('button[type="submit"]');
 	const submitLabel = form.querySelector('.submit-label');
 
+	if (!submitButton) {
+		return;
+	}
+
 	form.addEventListener('submit', () => {
 		form.classList.add('is-submitting');
 		form.setAttribute('aria-busy', 'true');
 		submitButton.disabled = true;
+
+		if (!submitLabel) {
+			return;
+		}
 
 		if (submitButton.dataset.submittingLabel) {
 			submitLabel.textContent = submitButton.dataset.submittingLabel;
@@ -423,7 +492,7 @@ if (questionForm) {
 		}
 
 		event.preventDefault();
-		if (!submitButton.disabled) {
+		if (submitButton && !submitButton.disabled) {
 			questionForm.requestSubmit(submitButton);
 		}
 	});

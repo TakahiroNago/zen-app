@@ -134,7 +134,7 @@
                 {{ __('プランの変更・解約は') }}<a href="{{ route('account.settings.edit') }}"><strong>{{ __('アカウント設定') }}</strong></a>{{ __('から手続きできます。解約後も、お支払い済み期間の終了までは有料機能をご利用いただけます。') }}
             </p>
         @endauth
-        <a class="text-link" href="{{ route('zen') }}">→ {{ __('相談に戻る') }}</a>
+        <a class="text-link" href="{{ route('home') }}">→ {{ __('相談に戻る') }}</a>
     </section>
 @endsection
 

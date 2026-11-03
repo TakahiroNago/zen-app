@@ -22,7 +22,7 @@ test('a concern with personal information is stopped before calling OpenAI', fun
     $user = User::factory()->create();
 
     $this->actingAs($user)
-        ->from(route('zen'))
+        ->from(route('home'))
         ->post(route('zen.respond'), ['concern' => '上司の連絡先は boss@example.com です'])
         ->assertUnprocessable()
         ->assertSee('メールアドレス・電話番号・住所などの個人情報と思われる内容が含まれています。')
@@ -48,9 +48,9 @@ test('a concern with personal information is never stored in the session', funct
 test('a concern failing validation is not flashed into the session', function () {
     $tooLongConcern = str_repeat('秘', ZenConsultation::CONCERN_MAX_LENGTH + 1);
 
-    $this->from(route('zen'))
+    $this->from(route('home'))
         ->post(route('zen.respond'), ['concern' => $tooLongConcern, 'confirm_personal_info' => '1'])
-        ->assertRedirect(route('zen'))
+        ->assertRedirect(route('home'))
         ->assertSessionHasErrors('concern')
         ->assertSessionHasInput('confirm_personal_info', '1')
         ->assertSessionMissing('_old_input.concern');

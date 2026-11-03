@@ -42,11 +42,14 @@ Route::prefix('{locale}')
     ->where(['locale' => 'en|ja'])
     ->middleware('locale')
     ->group(function () {
-        Route::get('/', function () {
-            return view('welcome');
-        })->name('home');
+        Route::get('/', [ZenController::class, 'index'])->name('home');
 
-        Route::get('/zen', [ZenController::class, 'index'])->name('zen');
+        // The consultation form now lives on the home page; keep old links working.
+        Route::get('/zen', function (Request $request) {
+            $request->session()->reflash();
+
+            return redirect()->route('home');
+        })->name('zen');
 
         Route::post('/zen/respond', [ZenController::class, 'respond'])->name('zen.respond');
 

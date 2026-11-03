@@ -2,9 +2,14 @@
     <a class="brand" href="{{ route('home') }}">
         <span class="brand-mark" aria-hidden="true">✦</span>
         <span class="brand-name">{{ __('心の庵') }}</span>
-        <span class="brand-caption">ZEN REFLECTIONS</span>
     </a>
-    <nav class="account-navigation" aria-label="{{ __('アカウント') }}">
+    <nav class="account-navigation" aria-label="{{ __('メインメニュー') }}">
+        @auth
+            <a class="header-history-link" href="{{ route('consultations.index') }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
+                {{ __('相談の記録') }}
+            </a>
+        @endauth
         <div class="language-navigation" aria-label="Language">
             @if (app()->isLocale('ja'))
                 <a href="{{ route('home', ['locale' => 'en']) }}" hreflang="en" lang="en">English</a>
@@ -14,12 +19,20 @@
         </div>
         @auth
             @if (isset($creditSummary))
+                @php($isOutOfCredits = ! $creditSummary['unlimited'] && $creditSummary['total'] === 0)
                 <a
-                    class="credit-balance-link"
+                    class="credit-balance-link{{ $isOutOfCredits ? ' is-empty' : '' }}"
                     href="{{ route('plans') }}"
                     aria-label="{{ $creditSummary['unlimited'] ? __('相談回数無制限') : __('利用可能な相談回数').(app()->isLocale('ja') ? ' '.$creditSummary['total'].'回' : ': '.$creditSummary['total'].' '.($creditSummary['total'] === 1 ? 'consultation' : 'consultations')) }}{{ app()->isLocale('ja') ? '。' : '. ' }}{{ __('料金・プランを見る') }}"
                 >
-                    <strong>{{ $creditSummary['unlimited'] ? '∞' : $creditSummary['total'] }}</strong>@if (! $creditSummary['unlimited'])<span class="credit-balance-unit">{{ app()->isLocale('ja') ? ' '.__('回') : ' '.($creditSummary['total'] === 1 ? 'consultation' : 'consultations') }}</span>@endif
+                    <span class="credit-balance-dot" aria-hidden="true"></span>
+                    @if ($creditSummary['unlimited'])
+                        <strong>∞</strong><span class="credit-balance-today">{{ app()->isLocale('ja') ? ' 無制限' : ' unlimited' }}</span>
+                    @elseif (app()->isLocale('ja'))
+                        <span><span class="credit-balance-today">本日</span>あと <strong>{{ $creditSummary['total'] }}</strong><span class="credit-balance-unit"> 回</span></span>
+                    @else
+                        <span><strong>{{ $creditSummary['total'] }}</strong><span class="credit-balance-unit"> left</span><span class="credit-balance-today"> today</span></span>
+                    @endif
                 </a>
             @else
                 <a href="{{ route('plans') }}">{{ __('料金・プラン') }}</a>
@@ -31,12 +44,12 @@
                 <button
                     type="button"
                     class="account-menu-trigger"
-                    aria-label="{{ __('アカウントメニューを開く') }}"
+                    aria-label="{{ __('その他のメニュー') }}"
                     aria-controls="account-popover"
                     aria-expanded="{{ $isAccountMenuOpen ? 'true' : 'false' }}"
                 >
-                    <svg class="account-menu-icon" aria-hidden="true" viewBox="0 0 16 16">
-                        <path fill="currentColor" d="M3 9.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
+                    <svg class="account-menu-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                        <path d="M4 7h16M4 12h16M4 17h16"/>
                     </svg>
                 </button>
                 <section class="account-popover" id="account-popover" aria-label="{{ __('アカウントメニュー') }}">
@@ -53,6 +66,11 @@
                     </div>
                     <a class="account-popover-link" href="{{ route('consultations.index') }}">{{ __('相談の記録') }}</a>
                     <a class="account-popover-link" href="{{ route('account.settings.edit') }}">{{ __('アカウント設定') }}</a>
+                    @if (app()->isLocale('ja'))
+                        <a class="account-popover-link account-popover-mobile-only" href="{{ route('home', ['locale' => 'en']) }}" hreflang="en" lang="en">English</a>
+                    @else
+                        <a class="account-popover-link account-popover-mobile-only" href="{{ route('home', ['locale' => 'ja']) }}" hreflang="ja" lang="ja">日本語</a>
+                    @endif
                     @if (auth()->user()->isAdmin())
                         <a class="account-popover-link" href="{{ route('admin.dashboard') }}">{{ __('管理者画面') }}</a>
                         <a class="account-popover-link" href="{{ route('admin.users.index') }}">{{ __('ユーザー管理') }}</a>

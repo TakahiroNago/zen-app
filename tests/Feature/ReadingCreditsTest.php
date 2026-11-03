@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Services\ConsultationCreditService;
 use App\Services\GuestTrialCreditService;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\RateLimiter;
@@ -60,7 +61,7 @@ test('guests can use one trial reading and are prompted to register afterwards',
     OpenAI::fake($responses);
 
     $zenPage = $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.10'])
-        ->get(route('zen'));
+        ->get(route('home'));
     $zenPage->assertOk()->assertCookie('guest_trial_device');
     $firstDevice = $zenPage->getCookie('guest_trial_device')->getValue();
 
@@ -68,7 +69,8 @@ test('guests can use one trial reading and are prompted to register afterwards',
         ->withCookie('guest_trial_device', $firstDevice)
         ->post(route('zen.respond'), ['concern' => 'One?'])
         ->assertOk()
-        ->assertSee('無料体験を使い切りました。無料会員登録すると毎日1回相談できます。→ 会員登録はこちら');
+        ->assertSee('無料体験はここまでです')
+        ->assertSee('class="credit-panel-primary" href="'.route('register').'"', false);
 
     $this->assertDatabaseHas('guest_trial_credits', ['used_credits' => 1]);
     $this->assertDatabaseCount('guest_trial_credits', 1);
@@ -77,7 +79,7 @@ test('guests can use one trial reading and are prompted to register afterwards',
     $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.11'])
         ->withCookie('guest_trial_device', $firstDevice)
         ->post(route('zen.respond'), ['concern' => 'Second reading from the same device?'])
-        ->assertRedirect(route('zen'))
+        ->assertRedirect(route('home'))
         ->assertSessionHas('credit_exhausted');
 
     $secondDevice = str_repeat('b', 64);
@@ -91,18 +93,18 @@ test('guests can use one trial reading and are prompted to register afterwards',
     $this->assertDatabaseCount('guest_trial_credits', 2);
 });
 
-test('guests with no trial credits see a full-width registration link and cannot draw a card', function () {
+test('guests with no trial credits see a registration panel instead of the consult button', function () {
     $deviceToken = str_repeat('c', 64);
     $guestCredits = app(GuestTrialCreditService::class);
     expect($guestCredits->consume($deviceToken))->toBeTrue()
         ->and($guestCredits->remaining($deviceToken))->toBe(0);
 
     $this->withCookie('guest_trial_device', $deviceToken)
-        ->get(route('zen'))
+        ->get(route('home'))
         ->assertOk()
-        ->assertSee('href="'.route('register').'"', false)
-        ->assertSee('class="primary-action" type="submit" disabled', false)
-        ->assertSee('無料体験を使い切りました。無料会員登録すると毎日1回相談できます。→ 会員登録はこちら');
+        ->assertSee('class="credit-panel-primary" href="'.route('register').'"', false)
+        ->assertSee('無料体験はここまでです')
+        ->assertDontSee('data-requires-input', false);
 });
 
 test('free members receive one reading per day without carrying unused credits forward', function () {
@@ -114,7 +116,7 @@ test('free members receive one reading per day without carrying unused credits f
         'purchased_credits' => 0,
     ])->save();
 
-    $this->actingAs($user)->get(route('zen'))
+    $this->actingAs($user)->get(route('home'))
         ->assertOk()
         ->assertSee('class="credit-balance-link"', false)
         ->assertSeeText('1 回')
@@ -140,7 +142,7 @@ test('premium members retain unlimited readings without an exhausted-credit noti
     $freeMember = User::factory()->create();
 
     $this->actingAs($freeMember)
-        ->get(route('zen'))
+        ->get(route('home'))
         ->assertOk()
         ->assertSee('class="credit-balance-link"', false)
         ->assertSee('href="'.route('plans').'"', false);
@@ -149,10 +151,10 @@ test('premium members retain unlimited readings without an exhausted-credit noti
     $premiumMember->forceFill(['plan' => User::PLAN_PREMIUM])->save();
 
     $this->actingAs($premiumMember)
-        ->get(route('zen'))
+        ->get(route('home'))
         ->assertOk()
         ->assertSee('<strong>∞</strong>', false)
-        ->assertDontSee('本日利用可能なクレジットを使い切りました。');
+        ->assertDontSee('class="credit-panel"', false);
 });
 
 test('legacy users with a null plan are treated as free members', function () {
@@ -182,7 +184,7 @@ test('purchased credits remain separate and can be spent after daily credits run
         ->and($user->fresh()->purchased_credits)->toBe(100);
 });
 
-test('members with no credits see a full-width plans link and cannot draw a card', function () {
+test('members with no credits see a plans panel instead of the consult button', function () {
     $user = User::factory()->create();
     $user->forceFill([
         'daily_credits' => 0,
@@ -191,12 +193,30 @@ test('members with no credits see a full-width plans link and cannot draw a card
     ])->save();
 
     $this->actingAs($user)
-        ->get(route('zen'))
+        ->get(route('home'))
         ->assertOk()
-        ->assertSee('href="'.route('plans').'"', false)
-        ->assertSee('class="primary-action" type="submit" disabled', false)
-        ->assertSee('本日利用可能なクレジットを使い切りました。→ 有料プランを見る');
+        ->assertSee('class="credit-panel-primary" href="'.route('plans').'"', false)
+        ->assertSee('本日の無料相談はここまでです')
+        ->assertDontSee('data-requires-input', false);
 });
+
+test('the exhausted-credit panel names when daily credits are replenished in Japan time', function (string $now, string $expectedNotice) {
+    $this->travelTo(CarbonImmutable::parse($now, 'UTC'));
+    $user = User::factory()->create();
+    $user->forceFill([
+        'daily_credits' => 0,
+        'daily_credits_refreshed_at' => now()->toDateString(),
+        'purchased_credits' => 0,
+    ])->save();
+
+    $this->actingAs($user)
+        ->get(route('home'))
+        ->assertOk()
+        ->assertSee($expectedNotice);
+})->with([
+    'evening in Japan' => ['2026-11-03 12:00:00', '明日の午前9時に、また1回ご相談いただけます。'],
+    'early morning in Japan' => ['2026-11-03 20:00:00', '本日の午前9時に、また1回ご相談いただけます。'],
+]);
 
 test('the result page links the entire exhausted member-credit notice to plans', function () {
     OpenAI::fake([
@@ -213,8 +233,9 @@ test('the result page links the entire exhausted member-credit notice to plans',
     $this->actingAs($user)
         ->post(route('zen.respond'), ['concern' => 'Last question?'])
         ->assertOk()
-        ->assertSee('<a class="form-notice credit-notice credit-notice-link" href="'.route('plans').'">', false)
-        ->assertSee('本日利用可能なクレジットを使い切りました。→ 有料プランを見る');
+        ->assertSee('class="credit-panel-primary" href="'.route('plans').'"', false)
+        ->assertSee('本日の無料相談はここまでです')
+        ->assertDontSee('もう一度相談する');
 });
 
 test('lite members receive ten daily credits up to a fifty-credit carryover cap', function () {
@@ -227,7 +248,7 @@ test('lite members receive ten daily credits up to a fifty-credit carryover cap'
         'purchased_credits' => 105,
     ])->save();
 
-    $this->actingAs($user)->get(route('zen'))->assertOk();
+    $this->actingAs($user)->get(route('home'))->assertOk();
 
     expect(app(ConsultationCreditService::class)->balance($user)['total'])->toBe(155)
         ->and($user->fresh()->daily_credits)->toBe(50)
@@ -384,9 +405,9 @@ test('premium members are limited to five readings per minute', function () {
     }
 
     $this->post(route('zen.respond'), ['concern' => 'One more question?'])
-        ->assertRedirect(route('zen'))
+        ->assertRedirect(route('home'))
         ->assertSessionHas('consultation_rate_limited');
-    $this->get(route('zen'))
+    $this->get(route('home'))
         ->assertOk()
         ->assertSee('1分あたり5回までです。');
 
@@ -416,7 +437,7 @@ test('premium members are limited to one thousand readings per calendar day', fu
         ->assertOk();
 
     $this->post(route('zen.respond'), ['concern' => 'The next question?'])
-        ->assertRedirect(route('zen'))
+        ->assertRedirect(route('home'))
         ->assertSessionHas('consultation_rate_limited', '本日のプレミアムプランの利用上限に達しました。明日以降に再度お試しください。');
 
     expect(RateLimiter::attempts($dailyRateLimitKey))->toBe(1000);
@@ -444,7 +465,7 @@ test('only one reading can run concurrently for each member or guest device', fu
     }
 
     $this->post(route('zen.respond'), ['concern' => 'Another reading?'])
-        ->assertRedirect(route('zen'))
+        ->assertRedirect(route('home'))
         ->assertSessionHas('consultation_rate_limited', '別の相談に回答中です。完了後にもう一度お試しください。');
 
     $lock->release();

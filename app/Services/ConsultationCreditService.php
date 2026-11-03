@@ -179,7 +179,15 @@ class ConsultationCreditService
         }
     }
 
-    private function dailyCreditLimit(?string $plan): int
+    /**
+     * The moment daily credits are next replenished (the start of the next day in the app timezone).
+     */
+    public function nextDailyRefreshAt(): CarbonImmutable
+    {
+        return CarbonImmutable::tomorrow();
+    }
+
+    public function dailyCreditLimit(?string $plan): int
     {
         return match ($plan ?? User::PLAN_FREE) {
             User::PLAN_LITE => 10,

@@ -34,7 +34,7 @@ class ZenController extends Controller
         ConsultationCreditService $creditService,
         GuestTrialCreditService $guestTrialCreditService,
     ): View {
-        return view('zen', $this->consultationFormData($request, $creditService, $guestTrialCreditService));
+        return view('welcome', $this->consultationFormData($request, $creditService, $guestTrialCreditService));
     }
 
     public function respond(
@@ -57,7 +57,7 @@ class ZenController extends Controller
             $anonymizedConcern = $personalInfoDetector->redact($concern);
 
             // Rendered directly instead of redirecting so the concern is never flashed into the session.
-            return response()->view('zen', [
+            return response()->view('welcome', [
                 ...$this->consultationFormData($request, $creditService, $guestTrialCreditService),
                 'concernInput' => $concern,
                 'personalInfoDetected' => true,
@@ -75,7 +75,7 @@ class ZenController extends Controller
         $lock = Cache::lock('zen-consultation:'.$lockIdentity, self::RESPONSE_LOCK_TTL_SECONDS);
 
         if (! $lock->get()) {
-            return redirect()->route('zen')->with(
+            return redirect()->route('home')->with(
                 'consultation_rate_limited',
                 __('別の相談に回答中です。完了後にもう一度お試しください。'),
             );
@@ -111,7 +111,7 @@ class ZenController extends Controller
             if ($user->plan === User::PLAN_PREMIUM) {
                 $dailyRateLimitKey = 'premium-daily-consultation:'.$user->getAuthIdentifier().':'.now()->toDateString();
                 if (RateLimiter::tooManyAttempts($dailyRateLimitKey, self::PREMIUM_DAILY_LIMIT)) {
-                    return redirect()->route('zen')->with(
+                    return redirect()->route('home')->with(
                         'consultation_rate_limited',
                         __('本日のプレミアムプランの利用上限に達しました。明日以降に再度お試しください。'),
                     );
@@ -121,7 +121,7 @@ class ZenController extends Controller
                 if (RateLimiter::tooManyAttempts($rateLimitKey, 5)) {
                     $secondsUntilAvailable = RateLimiter::availableIn($rateLimitKey);
 
-                    return redirect()->route('zen')->with(
+                    return redirect()->route('home')->with(
                         'consultation_rate_limited',
                         __('プレミアムプランの相談は1分あたり5回までです。:seconds秒後に再度お試しください。', [
                             'seconds' => $secondsUntilAvailable,
@@ -135,7 +135,7 @@ class ZenController extends Controller
 
             $creditBucket = $creditService->consume($user);
             if ($creditBucket === null) {
-                return redirect()->route('zen')->with('credit_exhausted', __('本日利用可能なクレジットを使い切りました。クレジット購入または有料プランをご検討ください。'));
+                return redirect()->route('home')->with('credit_exhausted', __('本日利用可能なクレジットを使い切りました。クレジット購入または有料プランをご検討ください。'));
             }
         } else {
             if (! is_string($guestDeviceToken)) {
@@ -143,7 +143,7 @@ class ZenController extends Controller
             }
 
             if (! $guestTrialCreditService->consume($guestDeviceToken)) {
-                return redirect()->route('zen')->with('credit_exhausted', __('無料体験を使い切りました。会員登録すると毎日1回相談できます。'));
+                return redirect()->route('home')->with('credit_exhausted', __('無料体験を使い切りました。会員登録すると毎日1回相談できます。'));
             }
         }
 

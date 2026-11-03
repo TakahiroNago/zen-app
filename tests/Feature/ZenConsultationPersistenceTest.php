@@ -257,7 +257,7 @@ test('guest consultations stay in the same session and are not written to the da
 
     $firstResponse = $this->post(route('zen.respond'), ['concern' => 'First question?'])
         ->assertOk()
-        ->assertSee('リンクでシェア')
+        ->assertSee('シェア・リンクをコピー')
         ->assertDontSee('Xでシェア')
         ->assertDontSee('LINEでシェア')
         ->assertDontSee('Facebookでシェア')

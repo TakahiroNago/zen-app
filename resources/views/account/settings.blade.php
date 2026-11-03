@@ -194,7 +194,7 @@
                 <button class="danger-action" type="button" data-delete-account-open>{{ __('アカウントを削除する') }}</button>
             </form>
         </section>
-        <a class="text-link" href="{{ route('zen') }}">→ {{ __('相談に戻る') }}</a>
+        <a class="text-link" href="{{ route('home') }}">→ {{ __('相談に戻る') }}</a>
     </section>
 @endsection
 

@@ -393,6 +393,7 @@ test('the email verification confirmation is shown as an auto-dismissing toast o
 
     $this->actingAs($user)
         ->withSession(['status' => 'email-verified'])
+        ->followingRedirects()
         ->get(route('zen'))
         ->assertOk()
         ->assertSee('class="toast"', false)
