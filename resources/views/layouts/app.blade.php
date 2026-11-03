@@ -23,6 +23,9 @@
         <meta property="og:locale" content="{{ app()->isLocale('ja') ? 'ja_JP' : 'en_US' }}">
         <meta name="twitter:card" content="summary">
     @endif
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap">
     @vite(['resources/css/app.css'])
 </head>
 <body @hasSection('body_class')class="@yield('body_class')"@endif>

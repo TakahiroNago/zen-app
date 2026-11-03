@@ -79,7 +79,7 @@ test('localized pages set the app locale and persist it for signed in users', fu
         ->assertSee('Plans & pricing')
         ->assertSee('¥580')
         ->assertSee('month')
-        ->assertSee('class="credit-balance-unit"> consultation</span>', false)
+        ->assertSee('class="credit-balance-unit"> left</span>', false)
         ->assertDontSee('料金・プラン');
 
     expect($user->fresh()->preferred_locale)->toBe('en');
