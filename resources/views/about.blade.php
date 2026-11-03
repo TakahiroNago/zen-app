@@ -4,7 +4,7 @@
 @section('main_class', 'history-content')
 
 @section('content')
-    <article class="history-panel">
+    <article class="history-panel about-panel">
         <p class="eyebrow">{{ __('ABOUT KOKORO NO IORI') }}</p>
         <h1>{{ __('心の庵について') }}</h1>
 
