@@ -31,7 +31,10 @@ class PublicConsultationShareService
 
     private const KEY_DERIVATION_INFO = 'zen-public-consultation-share-v2';
 
-    public function __construct(private readonly PersonalInfoDetector $personalInfoDetector) {}
+    public function __construct(
+        private readonly PersonalInfoDetector $personalInfoDetector,
+        private readonly ConsultationHighlights $highlights,
+    ) {}
 
     /**
      * Returns the active share token of a saved consultation, issuing a new one when none is active.
@@ -88,7 +91,7 @@ class PublicConsultationShareService
 
         $token = $this->newToken();
         $expiresAt = now()->addDays(self::EXPIRATION_DAYS);
-        $payload = $this->publicPayload($consultation['concern'], $consultation['response'], $consultation['image_number'] ?? null);
+        $payload = $this->publicPayload($consultation);
         Cache::put(
             $this->cacheKey($token),
             $this->encrypter($token)->encryptString(json_encode($payload, JSON_THROW_ON_ERROR)),
@@ -99,7 +102,7 @@ class PublicConsultationShareService
     }
 
     /**
-     * @return array{concern: ?string, response: string, concern_hidden: bool, image_number: ?int}|null
+     * @return array{concern: ?string, response: string, concern_hidden: bool, image_number: ?int, zengo: ?string, zengo_reading: ?string, zengo_meaning: ?string, daily_action: ?string}|null
      */
     public function find(#[\SensitiveParameter] string $token): ?array
     {
@@ -109,7 +112,7 @@ class PublicConsultationShareService
             ->where('share_expires_at', '>', now())
             ->first();
         if ($savedConsultation !== null) {
-            return $this->publicPayload($savedConsultation->concern, $savedConsultation->response, $savedConsultation->image_number);
+            return $this->publicPayload($savedConsultation->only(['concern', 'response', 'image_number', ...ConsultationHighlights::KEYS]));
         }
 
         $encryptedPayload = Cache::get($this->cacheKey($token));
@@ -173,22 +176,25 @@ class PublicConsultationShareService
     }
 
     /**
-     * @return array{concern: ?string, response: string, concern_hidden: bool, image_number: ?int}
+     * @param  array{concern: string, response: string, image_number?: mixed, zengo?: mixed, zengo_reading?: mixed, zengo_meaning?: mixed, daily_action?: mixed}  $consultation
+     * @return array{concern: ?string, response: string, concern_hidden: bool, image_number: ?int, zengo: ?string, zengo_reading: ?string, zengo_meaning: ?string, daily_action: ?string}
      */
-    private function publicPayload(#[\SensitiveParameter] string $concern, #[\SensitiveParameter] string $response, mixed $imageNumber): array
+    private function publicPayload(#[\SensitiveParameter] array $consultation): array
     {
-        $hideConcern = $this->personalInfoDetector->detect($concern) !== [];
+        $hideConcern = $this->personalInfoDetector->detect($consultation['concern']) !== [];
+        $imageNumber = $consultation['image_number'] ?? null;
 
         return [
-            'concern' => $hideConcern ? null : $concern,
-            'response' => $response,
+            'concern' => $hideConcern ? null : $consultation['concern'],
+            'response' => $consultation['response'],
             'concern_hidden' => $hideConcern,
             'image_number' => is_int($imageNumber) ? $imageNumber : null,
+            ...$this->highlights->fromStored($consultation),
         ];
     }
 
     /**
-     * @return array{concern: ?string, response: string, concern_hidden: bool, image_number: ?int}
+     * @return array{concern: ?string, response: string, concern_hidden: bool, image_number: ?int, zengo: ?string, zengo_reading: ?string, zengo_meaning: ?string, daily_action: ?string}
      */
     private function validatedPayload(#[\SensitiveParameter] mixed $payload): array
     {
@@ -205,6 +211,7 @@ class PublicConsultationShareService
             'response' => $payload['response'],
             'concern_hidden' => ($payload['concern_hidden'] ?? false) === true,
             'image_number' => is_int($payload['image_number'] ?? null) ? $payload['image_number'] : null,
+            ...$this->highlights->fromStored($payload),
         ];
     }
 

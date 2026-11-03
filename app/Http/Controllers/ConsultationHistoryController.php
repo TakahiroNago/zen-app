@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\ZenConsultation;
 use App\Services\ConsultationDeletionService;
+use App\Services\ConsultationHighlights;
 use App\Services\PublicConsultationShareService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -114,6 +115,7 @@ class ConsultationHistoryController extends Controller
                 'concern' => $sessionConsultation['concern'],
                 'response' => $sessionConsultation['response'],
                 'image_number' => $sessionConsultation['image_number'] ?? null,
+                ...app(ConsultationHighlights::class)->fromStored($sessionConsultation),
             ];
         } else {
             $user = $request->user();
@@ -127,7 +129,7 @@ class ConsultationHistoryController extends Controller
             }
 
             $consultationData = $this->visibleSavedConsultation($user, $consultation)
-                ->only(['concern', 'response', 'image_number', 'created_at']);
+                ->only(['concern', 'response', 'image_number', 'created_at', ...ConsultationHighlights::KEYS]);
         }
 
         return view('consultations.show', [

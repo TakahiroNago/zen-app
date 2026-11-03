@@ -11,7 +11,10 @@ use UnexpectedValueException;
 
 class SessionConsultationPersister
 {
-    public function __construct(private readonly PublicConsultationShareService $shareService) {}
+    public function __construct(
+        private readonly PublicConsultationShareService $shareService,
+        private readonly ConsultationHighlights $highlights,
+    ) {}
 
     public function persist(User $user, Request $request): void
     {
@@ -52,6 +55,7 @@ class SessionConsultationPersister
             $persistedConsultation = [
                 'concern' => $consultation['concern'],
                 'response' => $consultation['response'],
+                ...array_filter($this->highlights->fromStored($consultation), fn (?string $value): bool => $value !== null),
             ];
             if (is_int($consultation['image_number'] ?? null)) {
                 $persistedConsultation['image_number'] = $consultation['image_number'];
