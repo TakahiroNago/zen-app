@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'concern', 'response', 'topic', 'summary', 'daily_consultation_date', 'share_token_hash', 'share_token', 'share_expires_at', 'contains_personal_info', 'image_number'])]
+#[Fillable(['user_id', 'concern', 'response', 'topic', 'summary', 'daily_consultation_date', 'share_token_hash', 'share_token', 'share_expires_at', 'contains_personal_info', 'image_number', 'zengo', 'zengo_reading', 'zengo_meaning', 'daily_action'])]
 #[Hidden(['share_token', 'share_token_hash'])]
 class ZenConsultation extends Model
 {

@@ -1409,6 +1409,99 @@ svg.action-arrow {
     border-top: 1px solid var(--gold-line);
 }
 
+.zengo-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    margin: 0;
+    padding: 40px 32px;
+    border-top: 1px solid var(--gold-line);
+    border-bottom: 1px solid var(--gold-line);
+    text-align: center;
+}
+
+.zengo-label {
+    color: var(--gold-text);
+    font-size: 12px;
+    letter-spacing: 0.2em;
+}
+
+.zengo-text {
+    margin: 0;
+    color: var(--green-900);
+    font-family: var(--font-display);
+    font-size: 52px;
+    font-weight: 700;
+    letter-spacing: 0.24em;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.zengo-caption {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.zengo-reading {
+    color: var(--ink-sub);
+    font-size: 14px;
+    letter-spacing: 0.18em;
+}
+
+.zengo-meaning {
+    color: var(--ink-muted);
+    font-size: 14px;
+    line-height: 1.8;
+}
+
+.daily-action {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    padding: 24px 28px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+}
+
+.daily-action-icon {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--green-100);
+    color: var(--green-900);
+}
+
+.daily-action-icon svg {
+    width: 20px;
+    height: 20px;
+}
+
+.daily-action-copy {
+    display: grid;
+    gap: 6px;
+}
+
+.daily-action-label {
+    margin: 0;
+    color: var(--green-700);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+}
+
+.daily-action-text {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.9;
+}
+
 .consultation-share {
     display: grid;
     gap: 12px;
@@ -2390,6 +2483,24 @@ a.consultation-row:hover {
     .consultation-copy {
         font-size: 16px;
         line-height: 2;
+    }
+
+    .zengo-block {
+        padding: 28px 8px;
+    }
+
+    .zengo-text {
+        font-size: 36px;
+        letter-spacing: 0.2em;
+    }
+
+    .daily-action {
+        gap: 14px;
+        padding: 18px 18px;
+    }
+
+    .daily-action-text {
+        font-size: 15px;
     }
 
     .consultation-share-actions {

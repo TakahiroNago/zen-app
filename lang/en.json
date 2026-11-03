@@ -387,5 +387,7 @@
     "コピーできませんでした。本文を選択してコピーしてください。": "Could not copy. Please select the text and copy it manually.",
     "公開用URLを作成しました。もう一度「シェア・リンクをコピー」を押してください。": "The share link is ready. Tap \"Share / copy link\" again.",
     "心の庵で相談する": "Talk with Kokoro no Iori",
-    "コピー": "Copy"
+    "コピー": "Copy",
+    "今日の禅語": "Today's Zen saying",
+    "今日のひとつ": "One thing for today"
 }

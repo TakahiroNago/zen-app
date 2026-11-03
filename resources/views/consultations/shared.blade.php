@@ -38,10 +38,14 @@
             @endif
         </section>
 
+        @include('partials.consultation-zengo', ['zengo' => $consultation['zengo'] ?? null, 'zengoReading' => $consultation['zengo_reading'] ?? null, 'zengoMeaning' => $consultation['zengo_meaning'] ?? null])
+
         <section aria-labelledby="answer-heading">
             <h2 class="sr-only" id="answer-heading">{{ __('お答え') }}</h2>
             <div class="consultation-copy">{!! app(App\Services\ConsultationResponseFormatter::class)->toHtml($consultation['response']) !!}</div>
         </section>
+
+        @include('partials.consultation-daily-action', ['dailyAction' => $consultation['daily_action'] ?? null])
 
         <div class="result-actions">
             <a class="primary-action" href="{{ route('home') }}">

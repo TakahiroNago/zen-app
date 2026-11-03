@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\ZenConsultation;
 use App\Services\ConsultationCreditService;
+use App\Services\ConsultationHighlights;
 use App\Services\GuestTrialCreditService;
 use App\Services\PersonalInfoDetector;
 use Illuminate\Contracts\View\View;
@@ -193,7 +194,7 @@ class ZenController extends Controller
             $metadata = $isPremiumMember
                 ? [
                     'topic' => $topic,
-                    'summary' => $this->consultationSummary($concern, $answer),
+                    ...$this->consultationSummary($concern, $answer),
                 ]
                 : $this->consultationMetadata($concern, $answer);
             $consultation = [
@@ -302,7 +303,10 @@ class ZenController extends Controller
         return strtr($this->zenPrompt($name), $replacements);
     }
 
-    private function consultationSummary(#[\SensitiveParameter] string $concern, #[\SensitiveParameter] string $answer): string
+    /**
+     * @return array{summary: string, zengo: ?string, zengo_reading: ?string, zengo_meaning: ?string, daily_action: ?string}
+     */
+    private function consultationSummary(#[\SensitiveParameter] string $concern, #[\SensitiveParameter] string $answer): array
     {
         $response = OpenAI::chat()->create([
             'model' => 'gpt-5.6-luna',
@@ -337,11 +341,14 @@ class ZenController extends Controller
             throw new UnexpectedValueException('OpenAI returned an invalid consultation summary.');
         }
 
-        return $summary;
+        return [
+            'summary' => $summary,
+            ...$this->consultationHighlights($result, $answer),
+        ];
     }
 
     /**
-     * @return array{topic: string, summary: string}
+     * @return array{topic: string, summary: string, zengo: ?string, zengo_reading: ?string, zengo_meaning: ?string, daily_action: ?string}
      */
     private function consultationMetadata(#[\SensitiveParameter] string $concern, #[\SensitiveParameter] string $answer): array
     {
@@ -387,7 +394,23 @@ class ZenController extends Controller
         return [
             'topic' => $topic,
             'summary' => $summary,
+            ...$this->consultationHighlights($metadata, $answer),
         ];
+    }
+
+    /**
+     * The Zen saying and the one thing to try today, extracted with the metadata. Invalid or missing
+     * values only hide their block instead of failing the consultation.
+     *
+     * @return array{zengo: ?string, zengo_reading: ?string, zengo_meaning: ?string, daily_action: ?string}
+     */
+    private function consultationHighlights(#[\SensitiveParameter] array $output, #[\SensitiveParameter] string $answer): array
+    {
+        return app(ConsultationHighlights::class)->fromModelOutput(
+            $output,
+            $answer,
+            app()->isLocale('ja') ? 'ja' : 'en',
+        );
     }
 
     private function consultationTopicPrompt(#[\SensitiveParameter] string $prompt): string

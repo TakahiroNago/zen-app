@@ -20,10 +20,14 @@
             <p class="question-quote">{{ $concern }}</p>
         </section>
 
+        @include('partials.consultation-zengo', ['zengo' => $zengo ?? null, 'zengoReading' => $zengo_reading ?? null, 'zengoMeaning' => $zengo_meaning ?? null])
+
         <section aria-labelledby="answer-heading">
             <h2 class="sr-only" id="answer-heading">{{ __('お答え') }}</h2>
             <div class="consultation-copy" id="consultation-copy">{!! app(App\Services\ConsultationResponseFormatter::class)->toHtml($response) !!}</div>
         </section>
+
+        @include('partials.consultation-daily-action', ['dailyAction' => $daily_action ?? null])
 
         @include('partials.consultation-share', ['consultationId' => $consultationId, 'showSavedLink' => ! $isGuest])
 
