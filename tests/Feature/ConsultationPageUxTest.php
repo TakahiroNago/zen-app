@@ -8,17 +8,38 @@ use OpenAI\Responses\Chat\CreateResponse;
 
 uses(RefreshDatabase::class);
 
-test('the consultation form shows the privacy note before the input and a character counter', function () {
-    $this->get(route('zen'))
+test('the home page hosts the consultation form with a privacy note and a character counter', function () {
+    $this->get(route('home'))
         ->assertOk()
         ->assertSeeInOrder([
-            'id="concern-privacy-note"',
+            'action="'.route('zen.respond').'"',
             '<textarea',
             'aria-describedby="concern-privacy-note concern-character-count"',
+            'id="concern-privacy-note"',
             'id="concern-character-count"',
+            'data-requires-input',
         ], false)
         ->assertSee('maxlength="'.ZenConsultation::CONCERN_MAX_LENGTH.'"', false)
         ->assertSee('<span data-character-count>0</span> / '.ZenConsultation::CONCERN_MAX_LENGTH, false);
+});
+
+test('the old consultation form url redirects to the home page and keeps flashed messages', function () {
+    $this->withSession(['_flash' => ['old' => ['consultation_rate_limited'], 'new' => []], 'consultation_rate_limited' => '別の相談に回答中です。'])
+        ->get(route('zen'))
+        ->assertRedirect(route('home'));
+
+    $this->get(route('home'))
+        ->assertOk()
+        ->assertSee('別の相談に回答中です。');
+});
+
+test('the consultation form offers the configured hint chips', function () {
+    config(['zen.concern_hints' => ['眠れない夜が続いている']]);
+
+    $this->get(route('home'))
+        ->assertOk()
+        ->assertSee('data-concern-hint="眠れない夜が続いている"', false)
+        ->assertDontSee('data-concern-hint="仕事に疲れてしまった"', false);
 });
 
 test('concerns longer than the shared maximum length are rejected', function () {

@@ -64,7 +64,7 @@
                 <a class="history-filter-clear" href="{{ route('consultations.index') }}">{{ __('すべての相談記録を表示') }}</a>
             @else
                 <p class="history-empty">{{ __('まだ相談の記録がありません。') }}</p>
-                <a class="primary-action" href="{{ route('zen') }}">{{ __('禅師に相談する') }} <span class="action-arrow" aria-hidden="true">→</span></a>
+                <a class="primary-action" href="{{ route('home') }}">{{ __('禅師に相談する') }} <span class="action-arrow" aria-hidden="true">→</span></a>
             @endif
         @endif
 

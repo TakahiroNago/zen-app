@@ -19,4 +19,14 @@ return [
     */
     'consultation_retention_days' => (int) env('ZEN_CONSULTATION_RETENTION_DAYS', 365),
 
+    /*
+    | Example concerns offered as hint chips on the consultation form. Each
+    | entry is a translation key (Japanese source text; see lang/en.json).
+    */
+    'concern_hints' => [
+        '仕事に疲れてしまった',
+        '人間関係に悩んでいる',
+        '毎日を楽しみたい',
+    ],
+
 ];

@@ -18,6 +18,7 @@ test('unverified users can see the verification notice', function () {
 });
 
 test('verified users and guests can open public pages', function () {
-    $this->get('/ja/zen')->assertOk();
+    $this->get('/ja')->assertOk();
+    $this->get('/ja/zen')->assertRedirect('/ja');
     $this->actingAs(User::factory()->create())->get('/ja/plans')->assertOk();
 });
