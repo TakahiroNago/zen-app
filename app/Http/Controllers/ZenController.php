@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\ZenConsultation;
 use App\Services\ConsultationCreditService;
 use App\Services\ConsultationHighlights;
+use App\Services\ConsultationUsageLimiter;
 use App\Services\GuestTrialCreditService;
 use App\Services\PersonalInfoDetector;
 use Illuminate\Contracts\View\View;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\MessageBag;
 use Illuminate\Support\ViewErrorBag;
 use OpenAI\Laravel\Facades\OpenAI;
+use OpenAI\Responses\Chat\CreateResponse;
 use Throwable;
 use UnexpectedValueException;
 
@@ -27,14 +29,6 @@ class ZenController extends Controller
     private const GUEST_DEVICE_COOKIE = 'guest_trial_device';
 
     private const PREMIUM_DAILY_LIMIT = 1000;
-
-    /**
-     * Guest trials per IP address per 24 hours. Generous so shared networks (offices, mobile carriers) are not blocked,
-     * while still stopping a single client from clearing its cookie to get unlimited trials.
-     */
-    private const GUEST_IP_DAILY_LIMIT = 10;
-
-    private const GUEST_IP_DECAY_SECONDS = 86400;
 
     private const RESPONSE_LOCK_TTL_SECONDS = 300;
 
@@ -51,6 +45,7 @@ class ZenController extends Controller
         ConsultationCreditService $creditService,
         GuestTrialCreditService $guestTrialCreditService,
         PersonalInfoDetector $personalInfoDetector,
+        ConsultationUsageLimiter $usageLimiter,
     ): View|RedirectResponse|Response {
         $validated = $request->validate([
             'concern' => [
@@ -98,6 +93,7 @@ class ZenController extends Controller
                 $guestDeviceToken,
                 $creditService,
                 $guestTrialCreditService,
+                $usageLimiter,
                 $containsPersonalInfo,
             );
         } finally {
@@ -112,12 +108,26 @@ class ZenController extends Controller
         ?string $guestDeviceToken,
         ConsultationCreditService $creditService,
         GuestTrialCreditService $guestTrialCreditService,
+        ConsultationUsageLimiter $usageLimiter,
         bool $containsPersonalInfo,
     ): View|RedirectResponse {
         $creditBucket = null;
-        $guestIpRateLimitKey = null;
+
+        if (! $usageLimiter->consultationsEnabled() || $usageLimiter->globalLimitReached()) {
+            return redirect()->route('home')->with(
+                'consultation_rate_limited',
+                __('現在、相談の受付を一時的に停止しています。しばらく時間をおいてから再度お試しください。'),
+            );
+        }
 
         if ($user instanceof User) {
+            if ($usageLimiter->memberHasTooManyFailures($user)) {
+                return redirect()->route('home')->with(
+                    'consultation_rate_limited',
+                    __('相談の処理に繰り返し失敗したため、一時的に相談を制限しています。1時間ほど時間をおいてから再度お試しください。'),
+                );
+            }
+
             if ($user->plan === User::PLAN_PREMIUM) {
                 $dailyRateLimitKey = 'premium-daily-consultation:'.$user->getAuthIdentifier().':'.now()->toDateString();
                 if (RateLimiter::tooManyAttempts($dailyRateLimitKey, self::PREMIUM_DAILY_LIMIT)) {
@@ -152,8 +162,8 @@ class ZenController extends Controller
                 throw new \LogicException('Guest device token is required for guest consultations.');
             }
 
-            $guestIpRateLimitKey = $this->guestIpRateLimitKey($request);
-            if (RateLimiter::tooManyAttempts($guestIpRateLimitKey, self::GUEST_IP_DAILY_LIMIT)) {
+            $guestIpReservationKey = $usageLimiter->reserveGuestIpTrial($request->ip());
+            if ($guestIpReservationKey === null) {
                 return redirect()->route('home')->with(
                     'consultation_rate_limited',
                     __('このネットワークからの無料体験が上限に達しました。会員登録すると毎日1回相談できます。'),
@@ -161,11 +171,13 @@ class ZenController extends Controller
             }
 
             if (! $guestTrialCreditService->consume($guestDeviceToken)) {
+                $usageLimiter->releaseGuestIpTrial($guestIpReservationKey);
+
                 return redirect()->route('home')->with('credit_exhausted', __('無料体験を使い切りました。会員登録すると毎日1回相談できます。'));
             }
-
-            RateLimiter::hit($guestIpRateLimitKey, self::GUEST_IP_DECAY_SECONDS);
         }
+
+        $usageLimiter->recordGlobalUsage();
 
         try {
             $isPremiumMember = $user instanceof User && $user->plan === User::PLAN_PREMIUM;
@@ -183,7 +195,7 @@ class ZenController extends Controller
                     ->get(['summary', 'created_at']);
             }
 
-            $response = OpenAI::chat()->create([
+            $response = $this->createChatCompletion([
                 'model' => 'gpt-5.6-luna',
                 'messages' => [
                     [
@@ -237,13 +249,14 @@ class ZenController extends Controller
                 $consultationId = 'session-'.array_key_last($sessionConsultations);
             }
         } catch (Throwable $exception) {
-            if ($user instanceof User && $creditBucket !== null) {
-                $creditService->refund($user, $creditBucket);
+            // The guest IP reservation and global usage are deliberately kept: the attempt already cost AI tokens.
+            if ($user instanceof User) {
+                $usageLimiter->recordMemberFailure($user);
+                if ($creditBucket !== null) {
+                    $creditService->refund($user, $creditBucket);
+                }
             } elseif ($guestDeviceToken !== null) {
                 $guestTrialCreditService->refund($guestDeviceToken);
-                if ($guestIpRateLimitKey !== null) {
-                    RateLimiter::decrement($guestIpRateLimitKey, self::GUEST_IP_DECAY_SECONDS);
-                }
             }
 
             throw $exception;
@@ -259,7 +272,7 @@ class ZenController extends Controller
 
     private function consultationTopic(#[\SensitiveParameter] string $concern): string
     {
-        $response = OpenAI::chat()->create([
+        $response = $this->createChatCompletion([
             'model' => 'gpt-5.6-luna',
             'messages' => [
                 [
@@ -306,6 +319,21 @@ class ZenController extends Controller
         ]);
     }
 
+    /**
+     * Sends a chat completion, adding the configured output token cap when one is set.
+     *
+     * @param  array<string, mixed>  $parameters
+     */
+    private function createChatCompletion(#[\SensitiveParameter] array $parameters): CreateResponse
+    {
+        $maxCompletionTokens = config('zen.openai_max_completion_tokens');
+        if (is_int($maxCompletionTokens) && $maxCompletionTokens > 0) {
+            $parameters['max_completion_tokens'] = $maxCompletionTokens;
+        }
+
+        return OpenAI::chat()->create($parameters);
+    }
+
     private function zenPrompt(string $name): string
     {
         $prompt = config("zen.prompts.{$name}");
@@ -330,7 +358,7 @@ class ZenController extends Controller
      */
     private function consultationSummary(#[\SensitiveParameter] string $concern, #[\SensitiveParameter] string $answer): array
     {
-        $response = OpenAI::chat()->create([
+        $response = $this->createChatCompletion([
             'model' => 'gpt-5.6-luna',
             'messages' => [
                 [
@@ -374,7 +402,7 @@ class ZenController extends Controller
      */
     private function consultationMetadata(#[\SensitiveParameter] string $concern, #[\SensitiveParameter] string $answer): array
     {
-        $response = OpenAI::chat()->create([
+        $response = $this->createChatCompletion([
             'model' => 'gpt-5.6-luna',
             'messages' => [
                 [
@@ -468,19 +496,6 @@ class ZenController extends Controller
         }
 
         return compact('creditSummary', 'guestCredits');
-    }
-
-    /**
-     * The IP address is HMAC-hashed so raw guest IPs are never stored in the cache.
-     */
-    private function guestIpRateLimitKey(Request $request): string
-    {
-        $applicationKey = config('app.key');
-        if (! is_string($applicationKey) || $applicationKey === '') {
-            throw new \RuntimeException('APP_KEY is required to protect guest IP addresses.');
-        }
-
-        return 'guest-ip-consultation:'.hash_hmac('sha256', (string) $request->ip(), $applicationKey);
     }
 
     private function guestDeviceToken(Request $request): string
