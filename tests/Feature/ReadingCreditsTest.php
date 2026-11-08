@@ -109,6 +109,8 @@ test('guests are limited to ten trial readings per IP address per day even with 
             ->assertOk();
     }
 
+    // Step past the per-minute IP throttle so only the daily guest limit applies.
+    $this->travel(2)->minutes();
     $this->flushSession();
     $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.20'])
         ->withCookie('guest_trial_device', str_repeat('e', 64))
@@ -133,7 +135,7 @@ test('guests are limited to ten trial readings per IP address per day even with 
         ->assertOk();
 });
 
-test('a failed guest reading does not count towards the IP address limit', function () {
+test('a failed guest reading refunds the trial but still counts towards the IP address limit', function () {
     OpenAI::fake([new RuntimeException('OpenAI is unavailable.')]);
 
     $this->withoutExceptionHandling();
@@ -143,7 +145,7 @@ test('a failed guest reading does not count towards the IP address limit', funct
         ->toThrow(RuntimeException::class);
 
     $guestIpRateLimitKey = 'guest-ip-consultation:'.hash_hmac('sha256', '192.0.2.30', config('app.key'));
-    expect(RateLimiter::attempts($guestIpRateLimitKey))->toBe(0)
+    expect(RateLimiter::attempts($guestIpRateLimitKey))->toBe(1)
         ->and(app(GuestTrialCreditService::class)->remaining(str_repeat('a', 64)))->toBe(1);
 });
 

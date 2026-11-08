@@ -4,8 +4,12 @@ namespace App\Providers;
 
 use App\Models\User;
 use App\Services\ConsultationCreditService;
+use App\Services\ConsultationUsageLimiter;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -27,6 +31,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         URL::defaults(['locale' => 'ja']);
+
+        $this->configureRateLimiting();
 
         ResetPassword::createUrlUsing(function (User $user, string $token): string {
             return URL::route('password.reset', [
@@ -55,5 +61,18 @@ class AppServiceProvider extends ServiceProvider
                 $view->with('creditSummary', app(ConsultationCreditService::class)->balance($user));
             }
         });
+    }
+
+    /**
+     * Short-window limits per IP address. They return 429 with Retry-After and sit in front of the
+     * per-user credits and the limits in ConsultationUsageLimiter.
+     */
+    private function configureRateLimiting(): void
+    {
+        RateLimiter::for('consultations', fn (Request $request): Limit => Limit::perMinute(10)
+            ->by(app(ConsultationUsageLimiter::class)->hashedIdentifier((string) $request->ip())));
+
+        RateLimiter::for('registrations', fn (Request $request): Limit => Limit::perHour(10)
+            ->by(app(ConsultationUsageLimiter::class)->hashedIdentifier((string) $request->ip())));
     }
 }

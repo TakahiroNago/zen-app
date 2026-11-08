@@ -51,7 +51,7 @@ Route::prefix('{locale}')
             return redirect()->route('home');
         })->name('zen');
 
-        Route::post('/zen/respond', [ZenController::class, 'respond'])->name('zen.respond');
+        Route::post('/zen/respond', [ZenController::class, 'respond'])->middleware(['active', 'throttle:consultations'])->name('zen.respond');
 
         Route::get('/shared-consultations/{token}', SharedConsultationController::class)
             ->where('token', '[a-f0-9]{64}')
@@ -114,7 +114,7 @@ Route::prefix('{locale}')
 
         Route::middleware('guest')->group(function () {
             Route::get('/register', [RegisteredUserController::class, 'create'])->name('register');
-            Route::post('/register', [RegisteredUserController::class, 'store'])->name('register.store');
+            Route::post('/register', [RegisteredUserController::class, 'store'])->middleware('throttle:registrations')->name('register.store');
             Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
             Route::post('/login', [AuthenticatedSessionController::class, 'store'])->middleware('throttle:5,1')->name('login.store');
             Route::get('/forgot-password', [PasswordResetLinkController::class, 'create'])->name('password.request');
