@@ -28,6 +28,14 @@ class ZenController extends Controller
 
     private const PREMIUM_DAILY_LIMIT = 1000;
 
+    /**
+     * Guest trials per IP address per 24 hours. Generous so shared networks (offices, mobile carriers) are not blocked,
+     * while still stopping a single client from clearing its cookie to get unlimited trials.
+     */
+    private const GUEST_IP_DAILY_LIMIT = 10;
+
+    private const GUEST_IP_DECAY_SECONDS = 86400;
+
     private const RESPONSE_LOCK_TTL_SECONDS = 300;
 
     public function index(
@@ -107,6 +115,7 @@ class ZenController extends Controller
         bool $containsPersonalInfo,
     ): View|RedirectResponse {
         $creditBucket = null;
+        $guestIpRateLimitKey = null;
 
         if ($user instanceof User) {
             if ($user->plan === User::PLAN_PREMIUM) {
@@ -143,9 +152,19 @@ class ZenController extends Controller
                 throw new \LogicException('Guest device token is required for guest consultations.');
             }
 
+            $guestIpRateLimitKey = $this->guestIpRateLimitKey($request);
+            if (RateLimiter::tooManyAttempts($guestIpRateLimitKey, self::GUEST_IP_DAILY_LIMIT)) {
+                return redirect()->route('home')->with(
+                    'consultation_rate_limited',
+                    __('このネットワークからの無料体験が上限に達しました。会員登録すると毎日1回相談できます。'),
+                );
+            }
+
             if (! $guestTrialCreditService->consume($guestDeviceToken)) {
                 return redirect()->route('home')->with('credit_exhausted', __('無料体験を使い切りました。会員登録すると毎日1回相談できます。'));
             }
+
+            RateLimiter::hit($guestIpRateLimitKey, self::GUEST_IP_DECAY_SECONDS);
         }
 
         try {
@@ -222,6 +241,9 @@ class ZenController extends Controller
                 $creditService->refund($user, $creditBucket);
             } elseif ($guestDeviceToken !== null) {
                 $guestTrialCreditService->refund($guestDeviceToken);
+                if ($guestIpRateLimitKey !== null) {
+                    RateLimiter::decrement($guestIpRateLimitKey, self::GUEST_IP_DECAY_SECONDS);
+                }
             }
 
             throw $exception;
@@ -446,6 +468,19 @@ class ZenController extends Controller
         }
 
         return compact('creditSummary', 'guestCredits');
+    }
+
+    /**
+     * The IP address is HMAC-hashed so raw guest IPs are never stored in the cache.
+     */
+    private function guestIpRateLimitKey(Request $request): string
+    {
+        $applicationKey = config('app.key');
+        if (! is_string($applicationKey) || $applicationKey === '') {
+            throw new \RuntimeException('APP_KEY is required to protect guest IP addresses.');
+        }
+
+        return 'guest-ip-consultation:'.hash_hmac('sha256', (string) $request->ip(), $applicationKey);
     }
 
     private function guestDeviceToken(Request $request): string

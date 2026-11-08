@@ -93,6 +93,60 @@ test('guests can use one trial reading and are prompted to register afterwards',
     $this->assertDatabaseCount('guest_trial_credits', 2);
 });
 
+test('guests are limited to ten trial readings per IP address per day even with fresh devices', function () {
+    $responses = [];
+    foreach (range(1, 12) as $index) {
+        $responses[] = CreateResponse::fake(['choices' => [['message' => ['content' => "Guest result {$index}."]]]]);
+        $responses[] = CreateResponse::fake(['choices' => [['message' => ['content' => '{"topic":"その他","summary":"テスト要約"}']]]]);
+    }
+    OpenAI::fake($responses);
+
+    foreach (range(1, 10) as $index) {
+        $this->flushSession();
+        $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.20'])
+            ->withCookie('guest_trial_device', str_pad(dechex($index), 64, '0', STR_PAD_LEFT))
+            ->post(route('zen.respond'), ['concern' => "Question {$index}?"])
+            ->assertOk();
+    }
+
+    $this->flushSession();
+    $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.20'])
+        ->withCookie('guest_trial_device', str_repeat('e', 64))
+        ->post(route('zen.respond'), ['concern' => 'Eleventh question?'])
+        ->assertRedirect(route('home'))
+        ->assertSessionHas('consultation_rate_limited', 'このネットワークからの無料体験が上限に達しました。会員登録すると毎日1回相談できます。');
+    $this->assertDatabaseMissing('guest_trial_credits', [
+        'device_hash' => hash_hmac('sha256', str_repeat('e', 64), config('app.key')),
+    ]);
+
+    $this->flushSession();
+    $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.21'])
+        ->withCookie('guest_trial_device', str_repeat('e', 64))
+        ->post(route('zen.respond'), ['concern' => 'Question from another network?'])
+        ->assertOk();
+
+    $this->travel(1)->days();
+    $this->flushSession();
+    $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.20'])
+        ->withCookie('guest_trial_device', str_repeat('f', 64))
+        ->post(route('zen.respond'), ['concern' => 'Question on the next day?'])
+        ->assertOk();
+});
+
+test('a failed guest reading does not count towards the IP address limit', function () {
+    OpenAI::fake([new RuntimeException('OpenAI is unavailable.')]);
+
+    $this->withoutExceptionHandling();
+    expect(fn () => $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.30'])
+        ->withCookie('guest_trial_device', str_repeat('a', 64))
+        ->post(route('zen.respond'), ['concern' => 'Will this fail?']))
+        ->toThrow(RuntimeException::class);
+
+    $guestIpRateLimitKey = 'guest-ip-consultation:'.hash_hmac('sha256', '192.0.2.30', config('app.key'));
+    expect(RateLimiter::attempts($guestIpRateLimitKey))->toBe(0)
+        ->and(app(GuestTrialCreditService::class)->remaining(str_repeat('a', 64)))->toBe(1);
+});
+
 test('guests with no trial credits see a registration panel instead of the consult button', function () {
     $deviceToken = str_repeat('c', 64);
     $guestCredits = app(GuestTrialCreditService::class);
