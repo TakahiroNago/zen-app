@@ -63,6 +63,29 @@ test('the zen saying and the one thing for today are saved and shown on the resu
         ->assertSee('好きな飲み物をひとつ選び、ゆっくり味わってみる。');
 });
 
+test('a reading the answer wrote in parentheses after the saying is removed from the saying', function (string $zengoText) {
+    fakeConsultationWithMetadata(
+        highlightMetadata(['zengo' => ['text' => $zengoText, 'reading' => 'へいじょうしん これどう', 'meaning' => '迷いや焦りを含む心も、扱い方で道になる']]),
+        '『平常心是道（へいじょうしんこれどう）』という禅の言葉があります。
+
+今日は、ひと呼吸おいてから返事をしてみましょう。',
+    );
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('zen.respond'), ['concern' => '焦ってしまいます'])
+        ->assertOk()
+        ->assertSeeInOrder(['今日の禅語', '平常心是道</blockquote>', 'へいじょうしん これどう'], false)
+        ->assertDontSee('（へいじょうしんこれどう）</blockquote>', false);
+
+    expect($user->zenConsultations()->sole())
+        ->zengo->toBe('平常心是道')
+        ->zengo_reading->toBe('へいじょうしん これどう');
+})->with([
+    'full-width parentheses' => ['平常心是道（へいじょうしんこれどう）'],
+    'half-width parentheses' => ['平常心是道 (へいじょうしんこれどう)'],
+]);
+
 test('ungrounded or malformed highlights are dropped without failing the consultation', function (array $overrides, bool $showsZengo, bool $showsDailyAction) {
     fakeConsultationWithMetadata(highlightMetadata($overrides));
     $user = User::factory()->create();
