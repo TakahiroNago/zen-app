@@ -59,7 +59,7 @@ class ConsultationHighlights
      */
     private function validated(#[\SensitiveParameter] array $highlights, #[\SensitiveParameter] string $answer, string $locale): array
     {
-        $zengo = $this->singleLine($highlights['zengo'] ?? null, self::ZENGO_MAX_LENGTH);
+        $zengo = $this->singleLine($this->withoutInlineReading($highlights['zengo'] ?? null), self::ZENGO_MAX_LENGTH);
         $reading = $this->singleLine($highlights['zengo_reading'] ?? null, self::ZENGO_READING_MAX_LENGTH);
         $meaning = $this->singleLine($highlights['zengo_meaning'] ?? null, self::ZENGO_MEANING_MAX_LENGTH);
 
@@ -98,6 +98,21 @@ class ConsultationHighlights
         return $value === '' || mb_strlen($value) > $maxLength || preg_match('/[\r\n]/', $value) === 1
             ? null
             : $value;
+    }
+
+    /**
+     * Drops a kana reading the answer wrote in parentheses right after the saying, such as
+     * 「平常心是道（へいじょうしんこれどう）」, so the saying is not shown with its reading twice.
+     */
+    private function withoutInlineReading(mixed $zengo): mixed
+    {
+        if (! is_string($zengo)) {
+            return $zengo;
+        }
+
+        $stripped = trim((string) preg_replace('/\s*[（(][\p{Hiragana}ー\s]+[）)]$/u', '', $zengo));
+
+        return $stripped === '' ? $zengo : $stripped;
     }
 
     private function isJapanese(#[\SensitiveParameter] string $text): bool
