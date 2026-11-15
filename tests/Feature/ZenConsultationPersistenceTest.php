@@ -104,6 +104,21 @@ test('authenticated consultations are stored with their topic and summary', func
         ->toEqualCanonicalizing(['id', 'user_id', 'concern', 'response', 'topic', 'summary', 'daily_consultation_date', 'share_token_hash', 'share_token', 'share_expires_at', 'contains_personal_info', 'image_number', 'zengo', 'zengo_reading', 'zengo_meaning', 'daily_action', 'created_at', 'updated_at']);
 });
 
+test('consultation ownership and daily date cannot be mass assigned', function () {
+    $owner = User::factory()->create();
+    $otherUser = User::factory()->create();
+
+    $consultation = $owner->zenConsultations()->create([
+        'user_id' => $otherUser->id,
+        'daily_consultation_date' => now()->toDateString(),
+        'concern' => 'x',
+        'response' => 'y',
+    ]);
+
+    expect($consultation->refresh()->user_id)->toBe($owner->id)
+        ->and($consultation->daily_consultation_date)->toBeNull();
+});
+
 test('English consultations use English prompts and store an English summary', function () {
     $openAiFake = OpenAI::fake([
         CreateResponse::fake([
