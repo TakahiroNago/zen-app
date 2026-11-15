@@ -2,7 +2,6 @@
 
 use App\Models\ContactInquiry;
 use App\Models\User;
-use App\Models\ZenConsultation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 
@@ -26,7 +25,7 @@ test('admins see users, billing, usage and operations on the dashboard', functio
         'stripe_subscription_status' => 'past_due',
     ]);
     User::factory()->inactive()->create();
-    ZenConsultation::create(['user_id' => $admin->id, 'concern' => 'x', 'response' => 'y', 'topic' => '仕事']);
+    $admin->zenConsultations()->create(['concern' => 'x', 'response' => 'y', 'topic' => '仕事']);
     ContactInquiry::factory()->create(['subject' => 'Need help']);
 
     $this->actingAs($admin)
