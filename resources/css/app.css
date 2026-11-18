@@ -173,6 +173,11 @@ h2 {
     padding-block: 56px 72px;
 }
 
+/* Lets panels shrink to the viewport instead of being widened by their content. */
+.page-content > * {
+    min-width: 0;
+}
+
 /* ---------- Header ---------- */
 
 .site-header {
@@ -188,7 +193,7 @@ h2 {
 
 .brand {
     display: inline-flex;
-    min-width: 0;
+    flex: 0 0 auto;
     min-height: 44px;
     align-items: center;
     gap: 12px;
@@ -227,6 +232,9 @@ h2 {
 
 .account-navigation {
     position: relative;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 4px;
     color: var(--ink-nav);
     font-size: 14px;
@@ -1403,6 +1411,15 @@ svg.action-arrow {
     color: var(--ink-sub);
 }
 
+.consultation-copy pre {
+    white-space: pre-wrap;
+}
+
+.consultation-copy table {
+    display: block;
+    overflow-x: auto;
+}
+
 .consultation-copy hr {
     margin: 32px 0;
     border: 0;
@@ -2538,11 +2555,6 @@ a.consultation-row:hover {
         flex-wrap: wrap;
     }
 
-    .history-heading h1 {
-        flex: 0 0 auto;
-        white-space: nowrap;
-    }
-
     .consultation-row {
         grid-template-columns: minmax(0, 1fr) auto;
         gap: 6px 12px;
@@ -2597,7 +2609,8 @@ a.consultation-row:hover {
         font-size: 14px;
     }
 
-    .user-search {
+    .user-search,
+    .admin-actions {
         align-items: stretch;
         flex-wrap: wrap;
     }
@@ -2605,6 +2618,13 @@ a.consultation-row:hover {
     .user-details div {
         grid-template-columns: 1fr;
         gap: 6px;
+    }
+}
+
+/* The English brand name and the guest links do not fit side by side on phones. */
+@media (max-width: 520px) {
+    html[lang^="en"] .site-header:has(.account-register) .brand-name {
+        display: none;
     }
 }
 
