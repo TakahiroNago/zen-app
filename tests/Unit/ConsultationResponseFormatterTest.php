@@ -24,20 +24,18 @@ test('bold text closed after japanese punctuation is rendered', function () {
         ->and($html)->not->toContain('**');
 });
 
-test('japanese bold text keeps nested emphasis, links and code inside it', function () {
+test('japanese bold text keeps nested emphasis, link text and code inside it', function () {
     $html = formatResponse('まず、**「*今*」と[禅](https://example.com/zen)の`言葉`」**を味わいます。');
 
-    expect($html)->toContain('<strong>「<em>今</em>」と<a href="https://example.com/zen">禅</a>の<code>言葉</code>」</strong>を');
+    expect($html)->toContain('<strong>「<em>今</em>」と禅の<code>言葉</code>」</strong>を');
 });
 
 test('japanese bold text is escaped and never spans tags, code, links or paragraphs', function () {
     expect(formatResponse('、**「<b>&amp;」**を'))->toContain('<strong>「&amp;」</strong>を')
         ->and(formatResponse('、**「&lt;script&gt;」**を'))->toContain('<strong>「&lt;script&gt;」</strong>を')
         ->and(formatResponse('`、**「a」**を`'))->toContain('<code>、**「a」**を</code>')
-        ->and(formatResponse('[、**「a」](https://example.com)**を'))
-        ->toContain('<a href="https://example.com">、**「a」</a>**を')
-        ->and(formatResponse('[x](https://example.com/、**「a」**を)'))
-        ->toContain('<a href="https://example.com/%E3%80%81**%E3%80%8Ca%E3%80%8D**%E3%82%92">x</a>')
+        ->and(formatResponse('[、**「a」](https://example.com)**を'))->toContain('<p>、**「a」**を</p>')
+        ->and(formatResponse('[x](https://example.com/、**「a」**を)'))->toContain('<p>x</p>')
         ->and(formatResponse("、**「a」\n\n」**を"))->not->toContain('<strong>');
 });
 
@@ -73,10 +71,23 @@ test('dangerous url schemes are not rendered as links', function (string $markdo
     'autolink' => ['<javascript:alert(1)>'],
 ]);
 
-test('link attributes are escaped', function () {
-    expect(formatResponse('[x](https://example.com "a\" onmouseover=\"alert(1)")'))
-        ->toContain('title="a&quot; onmouseover=&quot;alert(1)"');
-});
+test('links are never rendered and keep only their text', function (string $markdown) {
+    $html = formatResponse($markdown);
+
+    expect($html)->not->toContain('<a')
+        ->and($html)->not->toContain('href')
+        ->and($html)->not->toContain('onmouseover')
+        ->and($html)->toContain('説明');
+})->with([
+    'inline link' => ['[説明](https://phishing.example/login)'],
+    'reference link' => ["[説明][link]\n\n[link]: https://phishing.example/login"],
+    'link with title' => ['[説明](https://phishing.example "a\" onmouseover=\"alert(1)")'],
+    'link inside japanese bold' => ['、**「[説明](https://phishing.example/login)」**を'],
+    'bare url' => ['説明 https://phishing.example/login'],
+    'www url' => ['説明 www.phishing.example/login'],
+    'angle bracket autolink' => ['説明 <https://phishing.example/login>'],
+    'email autolink' => ['説明 someone@phishing.example'],
+]);
 
 test('images are never rendered and keep only their alt text', function (string $markdown) {
     $html = formatResponse($markdown);
