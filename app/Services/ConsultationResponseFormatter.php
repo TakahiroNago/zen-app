@@ -6,6 +6,7 @@ use Illuminate\Support\Str;
 use League\CommonMark\Environment\EnvironmentBuilderInterface;
 use League\CommonMark\Event\DocumentParsedEvent;
 use League\CommonMark\Extension\CommonMark\Node\Inline\Image;
+use League\CommonMark\Extension\CommonMark\Node\Inline\Link;
 use League\CommonMark\Extension\ExtensionInterface;
 
 class ConsultationResponseFormatter implements ExtensionInterface
@@ -22,27 +23,29 @@ class ConsultationResponseFormatter implements ExtensionInterface
     {
         $environment
             ->addInlineParser(new CjkFriendlyEmphasisParser, 100)
-            ->addEventListener(DocumentParsedEvent::class, $this->removeImages(...));
+            ->addEventListener(DocumentParsedEvent::class, $this->removeLinksAndImages(...));
     }
 
     /**
-     * External images are never loaded; their alt text is kept as plain inline content.
+     * Responses never link out or load external images, so a crafted concern cannot turn a
+     * (publicly shareable) response into a clickable lure. The link text and the image alt text
+     * are kept as plain inline content; destinations and titles are dropped.
      */
-    private function removeImages(DocumentParsedEvent $event): void
+    private function removeLinksAndImages(DocumentParsedEvent $event): void
     {
-        $images = [];
+        $webResources = [];
         foreach ($event->getDocument()->iterator() as $node) {
-            if ($node instanceof Image) {
-                $images[] = $node;
+            if ($node instanceof Link || $node instanceof Image) {
+                $webResources[] = $node;
             }
         }
 
-        foreach ($images as $image) {
-            foreach ($image->children() as $altTextNode) {
-                $image->insertBefore($altTextNode);
+        foreach ($webResources as $webResource) {
+            foreach ($webResource->children() as $labelNode) {
+                $webResource->insertBefore($labelNode);
             }
 
-            $image->detach();
+            $webResource->detach();
         }
     }
 }
