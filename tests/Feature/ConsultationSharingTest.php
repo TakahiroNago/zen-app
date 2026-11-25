@@ -11,6 +11,9 @@ use Illuminate\Support\Facades\Route;
 
 uses(RefreshDatabase::class);
 
+// What llm-inspect-server would report for the texts these tests use.
+beforeEach(fn () => personalInfoScanner()->flag('boss@example.com', 'pii.email'));
+
 function shareableConsultation(User $user, array $attributes = []): ZenConsultation
 {
     return $user->zenConsultations()->create([

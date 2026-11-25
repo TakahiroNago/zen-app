@@ -41,6 +41,17 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
 
+    /*
+     * Personal information is detected by llm-inspect-server on the loopback address of this host
+     * (docs/personal-info-detection.md). While it cannot be reached, consultations are refused.
+     */
+    'llm_inspect' => [
+        'url' => env('LLM_INSPECT_URL', 'http://127.0.0.1:8787'),
+        'token' => env('LLM_INSPECT_TOKEN'),
+        'connect_timeout' => (float) env('LLM_INSPECT_CONNECT_TIMEOUT', 1),
+        'timeout' => (float) env('LLM_INSPECT_TIMEOUT', 3),
+    ],
+
     'contact' => [
         'email' => env('CONTACT_EMAIL', 'artfullstack@gmail.com'),
     ],

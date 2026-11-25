@@ -1,6 +1,8 @@
 <?php
 
+use App\Services\PersonalInfoScanner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\FakePersonalInfoScanner;
 use Tests\TestCase;
 
 /*
@@ -16,7 +18,7 @@ use Tests\TestCase;
 
 pest()->extend(TestCase::class)
  // ->use(RefreshDatabase::class)
-    ->in('Feature');
+    ->in('Feature', 'Integration');
 
 /*
 |--------------------------------------------------------------------------
@@ -57,4 +59,12 @@ function issueShareUrl(TestCase $test, int|string $consultationId): string
     return $test->postJson(route('consultations.share-link', (string) $consultationId))
         ->assertOk()
         ->json('url');
+}
+
+/**
+ * The scanner that replaces llm-inspect-server in tests (see Tests\TestCase).
+ */
+function personalInfoScanner(): FakePersonalInfoScanner
+{
+    return app(PersonalInfoScanner::class);
 }
