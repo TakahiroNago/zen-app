@@ -1,8 +1,6 @@
 <?php
 
 use App\Http\Middleware\AssignRequestId;
-use App\Http\Middleware\EnsureActiveUser;
-use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\RequireVerifiedEmailForAuthenticated;
 use App\Http\Middleware\RestrictImageSources;
 use App\Http\Middleware\SetLocale;
@@ -11,6 +9,8 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use TakahiroNago\AppFoundation\Http\Middleware\EnsureActiveUser;
+use TakahiroNago\AppFoundation\Http\Middleware\EnsureAdmin;
 
 /*
  * Function arguments (such as consultation text) must never be captured in exception traces,

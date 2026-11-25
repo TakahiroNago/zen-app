@@ -1,7 +1,5 @@
 <?php
 
-use App\Http\Middleware\EnsureActiveUser;
-use App\Http\Middleware\EnsureAdmin;
 use App\Models\User;
 use App\Notifications\AccountActivityNotification;
 use Illuminate\Auth\Notifications\ResetPassword;
@@ -9,6 +7,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use TakahiroNago\AppFoundation\Http\Middleware\EnsureActiveUser;
+use TakahiroNago\AppFoundation\Http\Middleware\EnsureAdmin;
 
 uses(RefreshDatabase::class);
 
