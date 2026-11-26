@@ -70,10 +70,73 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
+  # Personal information is detected by llm-inspect-server (docs/personal-info-detection.md).
+  # This job runs the application against the real server, at the version production runs.
+  personal-info-contract:
+    name: Personal Info Contract (llm-inspect)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # Keep in step with the version installed on the server.
+      LLM_INSPECT_VERSION: v0.2.0
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache llm-inspect-server
+        id: llm-inspect-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/llm-inspect-server
+          key: llm-inspect-server-${{ runner.os }}-${{ env.LLM_INSPECT_VERSION }}
+
+      - name: Build llm-inspect-server
+        if: steps.llm-inspect-cache.outputs.cache-hit != 'true'
+        run: |
+          cargo install --locked \
+            --git https://github.com/TakahiroNago/llm-inspect \
+            --tag "$LLM_INSPECT_VERSION" \
+            llm-inspect-server
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, curl, sqlite3, pdo_sqlite
+          coverage: none
+
+      - name: Prepare application environment
+        run: cp .env.example .env
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Generate application key
+        run: php artisan key:generate
+
+      - name: Start llm-inspect-server
+        run: |
+          ~/.cargo/bin/llm-inspect-server --bind 127.0.0.1:8787 --pack personal-ja &
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8787/healthz > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "llm-inspect-server did not start"
+          exit 1
+
+      - name: Run contract tests
+        env:
+          LLM_INSPECT_TEST_URL: http://127.0.0.1:8787
+        run: vendor/bin/pest tests/Integration
+
   deploy:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: [test, build]
+    needs: [test, build, personal-info-contract]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 15
 

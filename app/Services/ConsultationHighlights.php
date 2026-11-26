@@ -75,7 +75,7 @@ class ConsultationHighlights
             $highlights['daily_action'] ?? null,
             self::DAILY_ACTION_MAX_LENGTH[$locale] ?? self::DAILY_ACTION_MAX_LENGTH['en'],
         );
-        if ($dailyAction !== null && $this->personalInfoDetector->detect($dailyAction) !== []) {
+        if ($dailyAction !== null && $this->containsPersonalInfo($dailyAction)) {
             $dailyAction = null;
         }
 
@@ -85,6 +85,21 @@ class ConsultationHighlights
             'zengo_meaning' => $hasZengo ? $meaning : null,
             'daily_action' => $dailyAction,
         ];
+    }
+
+    /**
+     * A text that could not be checked counts as containing personal information, so the block is
+     * left out rather than shown unchecked. The pages that use the highlights keep working.
+     */
+    private function containsPersonalInfo(#[\SensitiveParameter] string $text): bool
+    {
+        try {
+            return $this->personalInfoDetector->detect($text) !== [];
+        } catch (PersonalInfoDetectionUnavailable $exception) {
+            report($exception);
+
+            return true;
+        }
     }
 
     private function singleLine(mixed $value, int $maxLength): ?string

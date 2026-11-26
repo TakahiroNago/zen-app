@@ -9,6 +9,12 @@ use OpenAI\Responses\Chat\CreateResponse;
 
 uses(RefreshDatabase::class);
 
+// What llm-inspect-server would report for the texts these tests use.
+beforeEach(fn () => personalInfoScanner()
+    ->flag('boss@example.com', 'pii.email')
+    ->flag('090-1234-5678', 'pii.ja.phone')
+    ->flag('田中さん', 'pii.ja.person_name'));
+
 function fakeConsultationResponses(): mixed
 {
     return OpenAI::fake([

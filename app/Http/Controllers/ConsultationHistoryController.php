@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\ZenConsultation;
 use App\Services\ConsultationDeletionService;
 use App\Services\ConsultationHighlights;
+use App\Services\PersonalInfoDetectionUnavailable;
 use App\Services\PublicConsultationShareService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -148,7 +149,15 @@ class ConsultationHistoryController extends Controller
             $sessionConsultation = $request->session()->get($sessionKey);
             abort_unless($this->isConsultation($sessionConsultation), 404);
 
-            $sharedConsultation = $shareService->shareSessionConsultation($sessionConsultation);
+            try {
+                $sharedConsultation = $shareService->shareSessionConsultation($sessionConsultation);
+            } catch (PersonalInfoDetectionUnavailable $exception) {
+                report($exception);
+
+                // The concern could not be checked, so no public copy of it is made.
+                return response()->json(['message' => __('公開用URLを作成できませんでした。時間をおいて再度お試しください。')], 503)
+                    ->header('Cache-Control', 'private, no-store');
+            }
             $request->session()->put($sessionKey, $sharedConsultation);
             $token = $sharedConsultation['share_token'];
         } else {

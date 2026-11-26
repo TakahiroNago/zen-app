@@ -7,6 +7,7 @@ use App\Models\ZenConsultation;
 use App\Services\ConsultationCreditService;
 use App\Services\ConsultationHighlights;
 use App\Services\ConsultationUsageLimiter;
+use App\Services\PersonalInfoDetectionUnavailable;
 use App\Services\PersonalInfoDetector;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Collection;
@@ -56,16 +57,37 @@ class ZenController extends Controller
             'confirm_personal_info' => ['nullable', 'boolean'],
         ]);
         $concern = $validated['concern'];
-        $containsPersonalInfo = $personalInfoDetector->detect($concern) !== [];
-        if ($containsPersonalInfo && ! $request->boolean('confirm_personal_info')) {
-            $anonymizedConcern = $personalInfoDetector->redact($concern);
 
+        try {
+            $containsPersonalInfo = $personalInfoDetector->detect($concern) !== [];
+            $anonymizedConcern = null;
+            if ($containsPersonalInfo && ! $request->boolean('confirm_personal_info')) {
+                $anonymizedConcern = $personalInfoDetector->redact($concern);
+                $anonymizedConcern = $personalInfoDetector->detect($anonymizedConcern) === [] && mb_strlen($anonymizedConcern) <= ZenConsultation::CONCERN_MAX_LENGTH
+                    ? $anonymizedConcern
+                    : null;
+            }
+        } catch (PersonalInfoDetectionUnavailable $exception) {
+            report($exception);
+
+            // A concern that could not be checked is not sent to the model. It is rendered back
+            // directly, like the case below, so it is never flashed into the session.
+            return response()->view('welcome', [
+                ...$this->consultationFormData($request, $creditService, $guestTrialCreditService),
+                'concernInput' => $concern,
+                'errors' => (new ViewErrorBag)->put('default', new MessageBag([
+                    'concern' => __('現在、相談内容の確認ができないため、相談を受け付けられません。しばらく時間をおいてから再度お試しください。'),
+                ])),
+            ], 503);
+        }
+
+        if ($containsPersonalInfo && ! $request->boolean('confirm_personal_info')) {
             // Rendered directly instead of redirecting so the concern is never flashed into the session.
             return response()->view('welcome', [
                 ...$this->consultationFormData($request, $creditService, $guestTrialCreditService),
                 'concernInput' => $concern,
                 'personalInfoDetected' => true,
-                'anonymizedConcern' => $personalInfoDetector->detect($anonymizedConcern) === [] && mb_strlen($anonymizedConcern) <= ZenConsultation::CONCERN_MAX_LENGTH ? $anonymizedConcern : null,
+                'anonymizedConcern' => $anonymizedConcern,
                 'errors' => (new ViewErrorBag)->put('default', new MessageBag([
                     'concern' => __('メールアドレス・電話番号・住所などの個人情報と思われる内容が含まれています。削除してから送信してください。このまま送信する場合は、下のチェックを入れてください。'),
                 ])),
