@@ -112,7 +112,10 @@ class PublicConsultationShareService
             ->where('share_expires_at', '>', now())
             ->first();
         if ($savedConsultation !== null) {
-            return $this->publicPayload($savedConsultation->only(['concern', 'response', 'image_number', ...ConsultationHighlights::KEYS]));
+            return $this->publicPayload(
+                $savedConsultation->only(['concern', 'response', 'image_number', ...ConsultationHighlights::KEYS]),
+                hideUncheckedConcern: true,
+            );
         }
 
         $encryptedPayload = Cache::get($this->cacheKey($token));
@@ -176,12 +179,28 @@ class PublicConsultationShareService
     }
 
     /**
+     * The concern is public only when it was checked and nothing was found. When the check itself
+     * is unavailable, issuing a new link fails (the exception is passed on), while an existing link
+     * of a saved consultation keeps working with the concern hidden ($hideUncheckedConcern).
+     *
      * @param  array{concern: string, response: string, image_number?: mixed, zengo?: mixed, zengo_reading?: mixed, zengo_meaning?: mixed, daily_action?: mixed}  $consultation
      * @return array{concern: ?string, response: string, concern_hidden: bool, image_number: ?int, zengo: ?string, zengo_reading: ?string, zengo_meaning: ?string, daily_action: ?string}
+     *
+     * @throws PersonalInfoDetectionUnavailable
      */
-    private function publicPayload(#[\SensitiveParameter] array $consultation): array
+    private function publicPayload(#[\SensitiveParameter] array $consultation, bool $hideUncheckedConcern = false): array
     {
-        $hideConcern = $this->personalInfoDetector->detect($consultation['concern']) !== [];
+        try {
+            $hideConcern = $this->personalInfoDetector->detect($consultation['concern']) !== [];
+        } catch (PersonalInfoDetectionUnavailable $exception) {
+            if (! $hideUncheckedConcern) {
+                throw $exception;
+            }
+
+            report($exception);
+            $hideConcern = true;
+        }
+
         $imageNumber = $consultation['image_number'] ?? null;
 
         return [

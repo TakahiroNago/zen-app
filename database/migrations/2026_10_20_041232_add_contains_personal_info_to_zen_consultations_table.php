@@ -15,7 +15,7 @@ return new class extends Migration
         });
 
         // Existing rows stay flagged unless their concern is verified to be free of detected personal information.
-        $detector = new PersonalInfoDetector;
+        $detector = app(PersonalInfoDetector::class);
         DB::table('zen_consultations')->select(['id', 'concern'])->orderBy('id')->chunkById(200, function ($rows) use ($detector): void {
             $cleanIds = $rows
                 ->filter(fn (object $row): bool => $detector->detect($row->concern) === [])

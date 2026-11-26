@@ -294,6 +294,7 @@
     "本日利用可能なクレジットを使い切りました。クレジット購入または有料プランをご検討ください。": "You have used all consultations available today. Consider purchasing credits or subscribing to a paid plan.",
     "無料体験を使い切りました。会員登録すると毎日1回相談できます。": "You have used your free trial. Create an account to get one consultation each day.",
     "このネットワークからの無料体験が上限に達しました。会員登録すると毎日1回相談できます。": "Free trials from this network have reached their limit. Create an account to get one consultation each day.",
+    "現在、相談内容の確認ができないため、相談を受け付けられません。しばらく時間をおいてから再度お試しください。": "We cannot check your message right now, so consultations are unavailable. Please try again later.",
     "現在、相談の受付を一時的に停止しています。しばらく時間をおいてから再度お試しください。": "Consultations are temporarily paused. Please try again later.",
     "相談の処理に繰り返し失敗したため、一時的に相談を制限しています。1時間ほど時間をおいてから再度お試しください。": "Consultations are temporarily limited because several attempts failed. Please try again in about an hour.",
     "お問い合わせフォーム": "contact form",

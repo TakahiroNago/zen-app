@@ -8,6 +8,9 @@ use OpenAI\Responses\Chat\CreateResponse;
 
 uses(RefreshDatabase::class);
 
+// What llm-inspect-server would report for the texts these tests use.
+beforeEach(fn () => personalInfoScanner()->flag('boss@example.com', 'pii.email'));
+
 const HIGHLIGHT_ANSWER = "『日日是好日』という禅の言葉があります。\n\n今日は、好きな飲み物をゆっくり味わってみましょう。";
 
 /**

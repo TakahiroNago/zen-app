@@ -47,6 +47,7 @@ AIとの対話を通じて、日常の悩みや迷いを言葉にし、禅の考
 | フロントエンド | Blade、Tailwind CSS 4、Vite |
 | データベース | MySQL |
 | AI連携 | OpenAI API |
+| 個人情報の検出 | [llm-inspect](https://github.com/TakahiroNago/llm-inspect) の HTTP サービス（同じサーバーのループバックで動かす） |
 | 認証 | Laravel標準認証、Laravel Socialite |
 | 決済連携 | Stripe PHP SDK |
 | インフラ | ConoHa VPS、Ubuntu、Nginx、PHP-FPM |
@@ -121,6 +122,8 @@ AIとの対話を通じて、日常の悩みや迷いを言葉にし、禅の考
    ```bash
    php artisan serve
    ```
+
+相談を送信するには、個人情報の検出を行う `llm-inspect-server` を起動しておく必要があります（起動していないと、相談の送信は 503 になります）。手順は [docs/personal-info-detection.md](docs/personal-info-detection.md) を参照してください。テスト（`php artisan test`）の実行には不要です。
 
 詳細な設定は、`.env.example` および各種設定ファイルを参照してください。
 
