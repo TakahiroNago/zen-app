@@ -2,13 +2,13 @@
 
 use App\Models\User;
 use App\Services\ConsultationCreditService;
-use App\Services\GuestTrialCreditService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\RateLimiter;
 use OpenAI\Laravel\Facades\OpenAI;
 use OpenAI\Responses\Chat\CreateResponse;
+use TakahiroNago\AppFoundation\Services\GuestTrialCreditService;
 
 uses(RefreshDatabase::class);
 

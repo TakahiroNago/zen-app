@@ -13,11 +13,11 @@ use App\Http\Controllers\BillingController;
 use App\Http\Controllers\ConsultationHistoryController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\SharedConsultationController;
-use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\ZenController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use TakahiroNago\AppFoundation\Http\Controllers\StripeWebhookController;
 
 Route::get('/', function (Request $request) {
     $locale = $request->user()?->preferredLocale()

@@ -3,13 +3,13 @@
 use App\Models\User;
 use App\Services\ConsultationCreditService;
 use App\Services\ConsultationUsageLimiter;
-use App\Services\GuestTrialCreditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use OpenAI\Laravel\Facades\OpenAI;
 use OpenAI\Resources\Chat;
 use OpenAI\Responses\Chat\CreateResponse;
+use TakahiroNago\AppFoundation\Services\GuestTrialCreditService;
 
 uses(RefreshDatabase::class);
 

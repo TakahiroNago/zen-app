@@ -7,7 +7,6 @@ use App\Models\ZenConsultation;
 use App\Services\ConsultationCreditService;
 use App\Services\ConsultationHighlights;
 use App\Services\ConsultationUsageLimiter;
-use App\Services\GuestTrialCreditService;
 use App\Services\PersonalInfoDetectionUnavailable;
 use App\Services\PersonalInfoDetector;
 use Illuminate\Contracts\View\View;
@@ -22,6 +21,7 @@ use Illuminate\Support\MessageBag;
 use Illuminate\Support\ViewErrorBag;
 use OpenAI\Laravel\Facades\OpenAI;
 use OpenAI\Responses\Chat\CreateResponse;
+use TakahiroNago\AppFoundation\Services\GuestTrialCreditService;
 use Throwable;
 use UnexpectedValueException;
 

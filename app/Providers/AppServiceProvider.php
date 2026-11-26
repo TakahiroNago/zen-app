@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\User;
 use App\Services\ConsultationCreditService;
 use App\Services\ConsultationUsageLimiter;
+use App\Services\StripeBillingService;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\View\View as ViewInstance;
+use TakahiroNago\AppFoundation\Contracts\HandlesStripeWebhooks;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -22,7 +24,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(HandlesStripeWebhooks::class, StripeBillingService::class);
     }
 
     /**

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "53061b9bf75a44c36e36168f288341f8",
+    "content-hash": "08bc1cffb1be88b8d377da40992e6700",
     "packages": [
         {
             "name": "brick/math",
@@ -6743,6 +6743,73 @@
                 }
             ],
             "time": "2026-10-26T21:55:04+00:00"
+        },
+        {
+            "name": "takahironago/laravel-app-foundation",
+            "version": "v0.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/TakahiroNago/laravel-app-foundation.git",
+                "reference": "28a29f36400eb91711610b0f086501b69993fb44"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/TakahiroNago/laravel-app-foundation/zipball/28a29f36400eb91711610b0f086501b69993fb44",
+                "reference": "28a29f36400eb91711610b0f086501b69993fb44",
+                "shasum": ""
+            },
+            "require": {
+                "illuminate/auth": "^13.0",
+                "illuminate/console": "^13.0",
+                "illuminate/contracts": "^13.0",
+                "illuminate/database": "^13.0",
+                "illuminate/http": "^13.0",
+                "illuminate/routing": "^13.0",
+                "illuminate/support": "^13.0",
+                "php": "^8.3",
+                "stripe/stripe-php": "^22.0"
+            },
+            "require-dev": {
+                "laravel/pint": "^1.27",
+                "orchestra/testbench": "^11.0",
+                "pestphp/pest": "^5.2",
+                "pestphp/pest-plugin-laravel": "^5.0"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "TakahiroNago\\AppFoundation\\AppFoundationServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "TakahiroNago\\AppFoundation\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "TakahiroNago\\AppFoundation\\Tests\\": "tests/"
+                }
+            },
+            "scripts": {
+                "test": [
+                    "pest"
+                ],
+                "lint": [
+                    "pint --test"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "Account, guest-trial and Stripe webhook building blocks shared by the ZEN and Tarot Laravel applications.",
+            "support": {
+                "source": "https://github.com/TakahiroNago/laravel-app-foundation/tree/v0.1.0",
+                "issues": "https://github.com/TakahiroNago/laravel-app-foundation/issues"
+            },
+            "time": "2026-11-25T15:01:20+00:00"
         },
         {
             "name": "tijsverkoyen/css-to-inline-styles",

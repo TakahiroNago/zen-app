@@ -13,8 +13,9 @@ use Stripe\Event;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Stripe;
 use Stripe\StripeClient;
+use TakahiroNago\AppFoundation\Contracts\HandlesStripeWebhooks;
 
-class StripeBillingService
+class StripeBillingService implements HandlesStripeWebhooks
 {
     public function __construct(private readonly ConsultationCreditService $creditService) {}
 

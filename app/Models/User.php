@@ -12,10 +12,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use TakahiroNago\AppFoundation\Contracts\Administrator;
 
 #[Fillable(['name', 'email', 'password', 'is_active', 'google_id', 'preferred_locale'])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable implements HasLocalePreference, MustVerifyEmail
+class User extends Authenticatable implements Administrator, HasLocalePreference, MustVerifyEmail
 {
     public const PLAN_FREE = 'free';
 
@@ -60,6 +61,11 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
     public function isAdmin(): bool
     {
         return $this->is_admin === true;
+    }
+
+    public function grantAdminAccess(): void
+    {
+        $this->forceFill(['is_admin' => true])->save();
     }
 
     public function preferredLocale(): string
