@@ -9,6 +9,8 @@ use App\Services\ConsultationHighlights;
 use App\Services\ConsultationUsageLimiter;
 use App\Services\PersonalInfoDetectionUnavailable;
 use App\Services\PersonalInfoDetector;
+use App\Services\PromptLeakDetector;
+use Closure;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
@@ -16,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Cookie;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\MessageBag;
 use Illuminate\Support\ViewErrorBag;
@@ -132,7 +135,7 @@ class ZenController extends Controller
         GuestTrialCreditService $guestTrialCreditService,
         ConsultationUsageLimiter $usageLimiter,
         bool $containsPersonalInfo,
-    ): View|RedirectResponse {
+    ): View|RedirectResponse|Response {
         $creditBucket = null;
 
         if (! $usageLimiter->consultationsEnabled() || $usageLimiter->globalLimitReached()) {
@@ -201,6 +204,17 @@ class ZenController extends Controller
 
         $usageLimiter->recordGlobalUsage();
 
+        // Runs at most once per consultation, so a failure while discarding leaked output cannot refund twice.
+        $usageRefunded = false;
+        $refundUsageOnce = function () use (&$usageRefunded, $user, $creditBucket, $guestDeviceToken, $creditService, $guestTrialCreditService, $usageLimiter): void {
+            if ($usageRefunded) {
+                return;
+            }
+
+            $usageRefunded = true;
+            $this->refundFailedConsultation($user, $creditBucket, $guestDeviceToken, $creditService, $guestTrialCreditService, $usageLimiter);
+        };
+
         try {
             $isPremiumMember = $user instanceof User && $user->plan === User::PLAN_PREMIUM;
             $topic = null;
@@ -244,12 +258,27 @@ class ZenController extends Controller
                 throw new UnexpectedValueException('OpenAI returned no consultation response.');
             }
 
+            // Leaked output is checked before it reaches the summary call, the database or the session.
+            $promptLeakDetector = PromptLeakDetector::fromConfig();
+            $leakDetection = $promptLeakDetector->detect($answer);
+            if ($leakDetection !== null) {
+                return $this->discardLeakedConsultation(
+                    $request, $user, $refundUsageOnce, $creditService, $guestTrialCreditService, $concern, $containsPersonalInfo, 'answer', $leakDetection,
+                );
+            }
+
             $metadata = $isPremiumMember
                 ? [
                     'topic' => $topic,
                     ...$this->consultationSummary($concern, $answer),
                 ]
                 : $this->consultationMetadata($concern, $answer);
+            $leakDetection = $promptLeakDetector->detect(...array_values($metadata));
+            if ($leakDetection !== null) {
+                return $this->discardLeakedConsultation(
+                    $request, $user, $refundUsageOnce, $creditService, $guestTrialCreditService, $concern, $containsPersonalInfo, $isPremiumMember ? 'summary' : 'metadata', $leakDetection,
+                );
+            }
             $consultation = [
                 'concern' => $concern,
                 'response' => $answer,
@@ -271,15 +300,7 @@ class ZenController extends Controller
                 $consultationId = 'session-'.array_key_last($sessionConsultations);
             }
         } catch (Throwable $exception) {
-            // The guest IP reservation and global usage are deliberately kept: the attempt already cost AI tokens.
-            if ($user instanceof User) {
-                $usageLimiter->recordMemberFailure($user);
-                if ($creditBucket !== null) {
-                    $creditService->refund($user, $creditBucket);
-                }
-            } elseif ($guestDeviceToken !== null) {
-                $guestTrialCreditService->refund($guestDeviceToken);
-            }
+            $refundUsageOnce();
 
             throw $exception;
         }
@@ -289,6 +310,68 @@ class ZenController extends Controller
             'consultationId' => $consultationId,
             'creditsRemaining' => $creditsRemaining,
             'isGuest' => ! $user instanceof User,
+        ]);
+    }
+
+    /**
+     * Gives back the credit of a consultation that produced no usable reading. The guest IP reservation,
+     * global usage and premium rate limits are deliberately kept: the attempt already cost AI tokens,
+     * and the member failure count stops repeated failures from becoming free retries.
+     */
+    private function refundFailedConsultation(
+        ?User $user,
+        ?string $creditBucket,
+        ?string $guestDeviceToken,
+        ConsultationCreditService $creditService,
+        GuestTrialCreditService $guestTrialCreditService,
+        ConsultationUsageLimiter $usageLimiter,
+    ): void {
+        if ($user instanceof User) {
+            $usageLimiter->recordMemberFailure($user);
+            if ($creditBucket !== null) {
+                $creditService->refund($user, $creditBucket);
+            }
+        } elseif ($guestDeviceToken !== null) {
+            $guestTrialCreditService->refund($guestDeviceToken);
+        }
+    }
+
+    /**
+     * Drops AI output that leaked internal prompt content without storing any of it, refunds the
+     * consultation and shows a fixed message instead. Only metadata is logged, never the output,
+     * prompt or concern text.
+     *
+     * @param  Closure(): void  $refundUsageOnce
+     */
+    private function discardLeakedConsultation(
+        Request $request,
+        ?User $user,
+        Closure $refundUsageOnce,
+        ConsultationCreditService $creditService,
+        GuestTrialCreditService $guestTrialCreditService,
+        #[\SensitiveParameter] string $concern,
+        bool $containsPersonalInfo,
+        string $stage,
+        string $detection,
+    ): Response {
+        $refundUsageOnce();
+
+        Log::warning('Discarded consultation output that leaked internal prompt content.', [
+            'stage' => $stage,
+            'detection' => $detection,
+            'userId' => $user?->getAuthIdentifier(),
+            'guest' => ! $user instanceof User,
+            'locale' => app()->getLocale(),
+        ]);
+
+        // Rendered directly instead of redirecting so the concern is never flashed into the session.
+        return response()->view('welcome', [
+            ...$this->consultationFormData($request, $creditService, $guestTrialCreditService),
+            'concernInput' => $concern,
+            'personalInfoDetected' => $containsPersonalInfo,
+            'errors' => (new ViewErrorBag)->put('default', new MessageBag([
+                'concern' => __('今回は、安心してお届けできる回答を生成できませんでした。少し表現を変えて、もう一度お話しいただけますか。'),
+            ])),
         ]);
     }
 
