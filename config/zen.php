@@ -12,6 +12,22 @@ return [
     'prompts' => $prompts,
 
     /*
+    | Output leak checks for the prompts above. Consultation output that
+    | contains a marker (ZEN_PROMPT_LEAK_MARKERS, comma separated canary
+    | strings embedded in the prompts) or a verbatim run of prompt text at
+    | least fragment_length characters long (whitespace ignored) is discarded.
+    | Markers shorter than 12 characters are ignored, and a fragment_length
+    | outside 20-200 falls back to 50 (see App\Services\PromptLeakDetector).
+    */
+    'prompt_leak' => [
+        'markers' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('ZEN_PROMPT_LEAK_MARKERS', '')),
+        ))),
+        'fragment_length' => env('ZEN_PROMPT_LEAK_FRAGMENT_LENGTH'),
+    ],
+
+    /*
     | Emergency stop for new consultations. Set ZEN_CONSULTATIONS_ENABLED=false
     | (then re-cache the config) to stop all AI API calls immediately.
     */

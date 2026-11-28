@@ -14,6 +14,13 @@ abstract class TestCase extends BaseTestCase
 
         config([
             'zen.prompts' => require __DIR__.'/Fixtures/zen-prompts.php',
+            'zen.prompt_leak.markers' => [
+                'TEST_MARKER_TEACHER_2026_ONLY_DO_NOT_USE_AS_SECRET',
+                'TEST_MARKER_METADATA_2026_ONLY_DO_NOT_USE_AS_SECRET',
+                'TEST_MARKER_SUMMARY_2026_ONLY_DO_NOT_USE_AS_SECRET',
+                'TEST_MARKER_PREMIUM_2026_ONLY_DO_NOT_USE_AS_SECRET',
+            ],
+            'zen.prompt_leak.fragment_length' => 50,
         ]);
 
         // No test reaches llm-inspect-server by accident. A test that needs personal information
